@@ -1,0 +1,11 @@
+#!/bin/sh
+# Fast local guard. CI is the authority.
+if command -v moon >/dev/null 2>&1; then
+  MOON=moon
+elif [ -x "$HOME/.moon/bin/moon" ]; then
+  MOON="$HOME/.moon/bin/moon"
+else
+  echo "pre-commit: MoonBit toolchain not found - skipping local checks."
+  exit 0
+fi
+"$MOON" check

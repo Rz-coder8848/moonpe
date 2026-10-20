@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MoonBit
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Toolchain
+        run: moon version --all
+      - name: Check
+        run: moon check --target all
+      - name: Test (wasm-gc)
+        run: moon test --target wasm-gc
+
+# `moon fmt --check` is deliberately not a CI gate: its output depends on the
+# toolchain release (older releases spell the default `Int` differently), and
+# old toolchain builds are removed from the download server, so gating CI on it
+# would tie the build to a version that expires. Formatting is enforced locally.
