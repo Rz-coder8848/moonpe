@@ -137,12 +137,13 @@ differently on each platform.
 
 ## Testing
 
-Nine tests, all offline:
+Thirteen tests, all offline:
 
 - A hand-built PE32 image with two sections, one import library (one named and
   one ordinal import) and an export directory with two named and one
   ordinal-only export.
-- A hand-built PE32+ image exercising the widened optional header.
+- Hand-built PE32+ images exercising the widened optional header and the
+  eight-byte import thunk table.
 - Malformed inputs: missing `MZ`, missing `PE\0\0`, truncated headers, an
   `e_lfanew` pointing outside the file, empty input.
 - A blackbox test that builds its own minimal image and only touches the public

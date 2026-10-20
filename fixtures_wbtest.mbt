@@ -335,3 +335,82 @@ fn build_bad_section_count() -> Bytes {
   set_u16(buf, 0x98, 0x10B)
   Bytes::from_array(buf)
 }
+
+///|
+/// A PE32+ image with an import directory. The 64-bit thunk table is eight
+/// bytes per entry with the ordinal flag in bit 63, which is a different code
+/// path from the 32-bit one.
+fn build_pe64_with_imports() -> Bytes {
+  let buf = blank(0x600)
+  set_u8(buf, 0, 0x4D)
+  set_u8(buf, 1, 0x5A)
+  set_u32(buf, 0x3C, 0x80)
+  set_u8(buf, 0x80, 0x50)
+  set_u8(buf, 0x81, 0x45)
+  set_u16(buf, 0x84, 0x8664)
+  set_u16(buf, 0x86, 2)
+  set_u16(buf, 0x94, 0xF0)
+  set_u16(buf, 0x96, 0x0022)
+  let mut p = 0x98
+  set_u16(buf, p, 0x20B)
+  p = p + 2
+  set_u8(buf, p, 14)
+  p = p + 2
+  p = p + 12
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u64(buf, p, 0x140000000L)
+  p = p + 8
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u32(buf, p, 0x200)
+  p = p + 4
+  p = p + 12
+  p = p + 4
+  set_u32(buf, p, 0x3000)
+  p = p + 4
+  set_u32(buf, p, 0x200)
+  p = p + 4
+  p = p + 4
+  set_u16(buf, p, 3)
+  p = p + 4
+  p = p + 32
+  p = p + 4
+  set_u32(buf, p, 16)
+  p = p + 4
+  // Import directory (slot 1) at RVA 0x2000.
+  set_u32(buf, p + 8, 0x2000)
+  set_u32(buf, p + 12, 0x28)
+  let t1 = 0x188
+  let _ = set_ascii(buf, t1, ".text")
+  set_u32(buf, t1 + 8, 0x100)
+  set_u32(buf, t1 + 12, 0x1000)
+  set_u32(buf, t1 + 16, 0x200)
+  set_u32(buf, t1 + 20, 0x200)
+  set_u32(buf, t1 + 36, 0x60000020)
+  let t2 = t1 + 40
+  let _ = set_ascii(buf, t2, ".rdata")
+  set_u32(buf, t2 + 8, 0x200)
+  set_u32(buf, t2 + 12, 0x2000)
+  set_u32(buf, t2 + 16, 0x200)
+  set_u32(buf, t2 + 20, 0x400)
+  set_u32(buf, t2 + 36, 0x40000040)
+  set_u8(buf, 0x200, 0xC3)
+  // Import descriptor.
+  set_u32(buf, 0x400, 0x2040)
+  set_u32(buf, 0x40C, 0x2080)
+  set_u32(buf, 0x410, 0x2060)
+  // Thunk tables: named import, ordinal 5, terminator (8 bytes each).
+  set_u64(buf, 0x440, 0x2090L)
+  set_u8(buf, 0x448, 5)
+  set_u8(buf, 0x44F, 0x80)
+  set_u64(buf, 0x460, 0x2090L)
+  set_u8(buf, 0x468, 5)
+  set_u8(buf, 0x46F, 0x80)
+  let _ = set_cstr(buf, 0x480, "KERNEL32.dll")
+  set_u16(buf, 0x490, 0)
+  let _ = set_cstr(buf, 0x492, "Sleep")
+  Bytes::from_array(buf)
+}

@@ -202,3 +202,29 @@ test "truncated images never panic" {
 test "oversized section table is rejected" {
   assert_eq(parses(build_bad_section_count()), false)
 }
+
+///|
+/// The 64-bit import path: eight-byte thunks with the ordinal flag in bit 63.
+test "pe64 imports" {
+  assert_eq(
+    import_summary(build_pe64_with_imports()),
+    "KERNEL32.dll:Sleep@name;#5;",
+  )
+}
+
+///|
+/// `section_bytes` returns the file-backed bytes of a section and refuses a
+/// range that lies outside the file.
+test "section bytes" {
+  match try_parse(build_pe32()) {
+    None => assert_true(false)
+    Some(pe) =>
+      match pe.section_bytes(pe.sections[0]) {
+        None => assert_true(false)
+        Some(bytes) => {
+          assert_eq(bytes.length(), 0x200)
+          assert_eq(bytes[0].to_int(), 0xC3)
+        }
+      }
+  }
+}
