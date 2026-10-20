@@ -318,3 +318,20 @@ fn build_bad_lfanew() -> Bytes {
   set_u32(buf, 0x3C, 0x10000)
   Bytes::from_array(buf)
 }
+
+///|
+/// A file whose section table claims far more entries than the file can hold.
+fn build_bad_section_count() -> Bytes {
+  let buf = blank(0x200)
+  set_u8(buf, 0, 0x4D)
+  set_u8(buf, 1, 0x5A)
+  set_u32(buf, 0x3C, 0x80)
+  set_u8(buf, 0x80, 0x50)
+  set_u8(buf, 0x81, 0x45)
+  set_u16(buf, 0x84, 0x014C)
+  set_u16(buf, 0x86, 0xFFFF)
+  set_u16(buf, 0x94, 0xE0)
+  set_u16(buf, 0x96, 0x0102)
+  set_u16(buf, 0x98, 0x10B)
+  Bytes::from_array(buf)
+}

@@ -172,3 +172,33 @@ test "malformed images are rejected" {
   assert_eq(parses(b""), false)
   assert_eq(parses(b"MZ"), false)
 }
+
+///|
+/// Truncating a valid image at every possible length must produce a clean
+/// error. This is the cheapest way to catch an unguarded index in a format
+/// parser: any missed bounds check shows up as a panic instead of a `PeError`.
+test "truncated images never panic" {
+  let full = build_pe32()
+  let mut length = 0
+  while length < full.length() {
+    let prefix : Array[Byte] = []
+    let mut i = 0
+    while i < length {
+      prefix.push(full[i])
+      i = i + 1
+    }
+    let _ = try {
+      let _ = Pe::parse(Bytes::from_array(prefix))
+    } catch {
+      _ => ()
+    }
+    length = length + 1
+  }
+  assert_true(true)
+}
+
+///|
+/// A section table larger than the file is rejected, not read past the end.
+test "oversized section table is rejected" {
+  assert_eq(parses(build_bad_section_count()), false)
+}
