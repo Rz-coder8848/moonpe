@@ -52,6 +52,7 @@ is in [`docs/对比说明.md`](docs/对比说明.md).
 | Exports, including ordinal-only entries | ✅ |
 | Debug directory, CodeView `RSDS`/`NB10`, PDB path and age | ✅ |
 | Base relocations, counted by fixup type | ✅ |
+| Section entropy and a release/triage check with a verdict | ✅ |
 | Resource tree (type / name / language) | ✅ |
 | `VERSIONINFO`: file/product version and string table | ✅ |
 | Exception, Security, Architecture, GlobalPtr, TLS, LoadConfig, BoundImport, IAT, CLR, Reserved | address range only (by design) |
@@ -125,7 +126,7 @@ version:   Microsoft® Windows® Operating System 10.0.26100.9444
 ```
 
 Commands: `info`, `sections`, `imports`, `exports`, `debug`, `relocations`,
-`resources`, `all`.
+`resources`, `check`, `all`.
 
 ```
 $ moon run cmd/moonpe --target js -- resources C:/Windows/System32/kernel32.dll
@@ -140,6 +141,17 @@ $ moon run cmd/moonpe --target js -- relocations C:/Windows/System32/kernel32.dl
 ...
 ```
 
+$ moon run cmd/moonpe --target js -- check C:/Windows/System32/kernel32.dll
+verdict:   ok
+max entropy: 625 / 800
+  [INFO] DELAY_IMPORTS     3 delay-loaded libraries; static-only dependency checks miss these
+  [INFO] CAPABILITIES      imports CreateRemoteThreadEx, VirtualAllocEx, ... (loader APIs)
+```
+
+The check deliberately treats those imports as a *capability*, not a verdict:
+`kernel32.dll` imports most of the list and still comes out `ok`. It only
+escalates when the imports appear together with writable-executable code or a
+high-entropy section.
 ## Design notes
 
 **Bounds-checked reads carry the offset.** `Reader::need` turns every overrun

@@ -4,6 +4,27 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-10-21
+
+### Added
+
+- Section entropy (`Pe::section_entropy`, `byte_entropy`): Shannon entropy in
+  bits per byte, the cheapest signal that a section is packed or encrypted.
+- `Pe::check`: a release / triage report that turns the parsed data into
+  findings and a verdict (`ok`, `review`, `suspicious`).
+  - writable-and-executable sections (high);
+  - high-entropy sections (warning);
+  - missing ASLR, NX, CFG and HIGH_ENTROPY_VA;
+  - absence of an embedded certificate table (worded so catalog signing is not
+    misreported);
+  - delay-loaded dependency count;
+  - loader / process-manipulation imports, reported as a capability, and only
+    escalated when combined with writable-executable code or high entropy —
+    `kernel32.dll` imports most of that list and must still come out `ok`;
+  - TLS directory and CLR header presence.
+- CLI `check` command.
+- Three tests covering a hardened image (`ok`), a writable-executable section
+  (`suspicious`) and a uniformly distributed section (`review`).
 ## [0.2.0] - 2026-10-21
 
 ### Added
