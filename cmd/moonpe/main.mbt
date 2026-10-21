@@ -23,6 +23,7 @@ fn print_usage() -> Unit {
   println("  debug        debug directory entries and PDB paths")
   println("  relocations  relocation blocks by fixup type")
   println("  resources    resource tree and VERSIONINFO")
+  println("  check        release and triage findings with a verdict")
   println("  all          everything")
 }
 
@@ -81,6 +82,8 @@ fn run() -> Unit {
     print_relocations(pe)
   } else if command == "resources" {
     print_resources(pe)
+  } else if command == "check" {
+    print_check(pe)
   } else if command == "all" {
     print_info(path, pe)
     println("")
@@ -95,6 +98,8 @@ fn run() -> Unit {
     print_relocations(pe)
     println("")
     print_resources(pe)
+    println("")
+    print_check(pe)
   } else {
     fail("unknown command '" + command + "'")
     print_usage()
@@ -430,5 +435,35 @@ fn print_resources(pe : @pe.Pe) -> Unit {
           )
         }
       }
+  }
+}
+
+///|
+fn print_check(pe : @pe.Pe) -> Unit {
+  let report = pe.check()
+
+  println("verdict:   " + report.verdict)
+  println(
+    "max entropy: " +
+    (report.max_section_entropy * 100.0).to_int().to_string() +
+    " / 800",
+  )
+  if report.findings.length() == 0 {
+    println("  (no findings)")
+  } else {
+    for finding in report.findings {
+      let tag = match finding.severity {
+        @pe.Info => "INFO"
+        @pe.Warning => "WARN"
+        @pe.High => "HIGH"
+      }
+      println(
+        "  [" +
+        pad_right(tag, 4) +
+        "] " +
+        pad_right(finding.code, 18) +
+        finding.message,
+      )
+    }
   }
 }
