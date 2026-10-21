@@ -40,9 +40,52 @@ pub fn byte_entropy(bytes : Bytes) -> Double? {
 
 ///|
 /// Entropy of a section's file-backed bytes.
+///
+/// The range is scanned in place: a packed section can be hundreds of
+/// megabytes, and copying it just to count bytes would dominate the scan.
 pub fn Pe::section_entropy(self : Pe, section : Section) -> Double? {
-  match self.section_bytes(section) {
-    Some(bytes) => byte_entropy(bytes)
-    None => None
+  if section.raw_size <= 0 {
+    return None
   }
+  let start = section.raw_pointer
+  let end = start + section.raw_size
+  if start < 0 || end > self.bytes.length() {
+    return None
+  }
+  Some(entropy_range(self.bytes, start, end))
+}
+
+///|
+/// Entropy over `bytes[start..end)`.
+pub fn entropy_range(bytes : Bytes, start : Int32, end : Int32) -> Double {
+  let counts : Array[Int32] = []
+  let mut i = 0
+  while i < 256 {
+    counts.push(0)
+    i = i + 1
+  }
+  let limit = if end > bytes.length() { bytes.length() } else { end }
+  let mut j = start
+  while j < limit && j >= 0 {
+    let value = bytes[j].to_int()
+    if value >= 0 && value < 256 {
+      counts[value] = counts[value] + 1
+    }
+    j = j + 1
+  }
+  let total = (limit - start).to_double()
+  if total <= 0.0 {
+    return 0.0
+  }
+  let mut entropy = 0.0
+  let mut k = 0
+  while k < 256 {
+    let count = counts[k]
+    if count > 0 {
+      let p = count.to_double() / total
+      entropy = entropy - p * @math.log2(p)
+    }
+    k = k + 1
+  }
+  entropy
 }

@@ -74,3 +74,6 @@ pub extend TlsInfo with @debug.Debug::{to_repr}
 
 ///|
 pub extend ClrInfo with @debug.Debug::{to_repr}
+
+///|
+pub extend FunctionTable with @debug.Debug::{to_repr}

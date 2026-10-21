@@ -445,3 +445,66 @@ test "manifest execution level is decoded" {
     }
   }
 }
+
+///|
+/// The runtime-function table reports its entry count and RVA span.
+test "function table is summarised" {
+  match try_parse(build_with_tables()) {
+    None => assert_true(false)
+    Some(pe) =>
+      match pe.function_table() {
+        None => assert_true(false)
+        Some(table) => {
+          assert_eq(table.entries, 2)
+          assert_eq(table.first_rva, 0x1000)
+          assert_eq(table.last_rva, 0x1090)
+        }
+      }
+  }
+}
+
+///|
+/// Bound-import module names are readable.
+test "bound imports are listed" {
+  match try_parse(build_with_tables()) {
+    None => assert_true(false)
+    Some(pe) => {
+      let names = pe.bound_imports()
+      assert_eq(names.length(), 1)
+      assert_eq(names[0], "KERNEL32.dll")
+    }
+  }
+}
+
+///|
+/// Deterministically mutate a valid image and require that every attempt either
+/// parses or raises `PeError`. A panic here would be an unguarded index in the
+/// parser; the test fails loudly if one appears.
+test "mutated images never panic" {
+  let base = build_pe32()
+  let mut seed = 0x12345678
+  let mut round = 0
+  while round < 200 {
+    let copy : Array[Byte] = []
+    let mut i = 0
+    while i < base.length() {
+      copy.push(base[i])
+      i = i + 1
+    }
+    let mut k = 0
+    while k < 4 {
+      seed = (seed * 1103515245 + 12345) & 0x7FFFFFFF
+      let position = seed % copy.length()
+      seed = (seed * 1103515245 + 12345) & 0x7FFFFFFF
+      copy[position] = Int32::to_byte(seed & 0xFF)
+      k = k + 1
+    }
+    let _ = try {
+      let _ = Pe::parse(Bytes::from_array(copy))
+    } catch {
+      _ => ()
+    }
+    round = round + 1
+  }
+  assert_true(true)
+}
