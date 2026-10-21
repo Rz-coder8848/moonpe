@@ -53,6 +53,9 @@ is in [`docs/对比说明.md`](docs/对比说明.md).
 | Debug directory, CodeView `RSDS`/`NB10`, PDB path and age | ✅ |
 | Base relocations, counted by fixup type | ✅ |
 | Section entropy and a release/triage check with a verdict | ✅ |
+| TLS directory and callback count | ✅ |
+| CLR header and .NET runtime version | ✅ |
+| Application manifest and equestedExecutionLevel | ✅ |
 | Resource tree (type / name / language) | ✅ |
 | `VERSIONINFO`: file/product version and string table | ✅ |
 | Exception, Security, Architecture, GlobalPtr, TLS, LoadConfig, BoundImport, IAT, CLR, Reserved | address range only (by design) |

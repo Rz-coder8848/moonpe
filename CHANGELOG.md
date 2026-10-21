@@ -4,6 +4,21 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-10-21
+
+### Added
+
+- TLS directory (`Pe::tls`): callback count, zero-fill and raw-data sizes.
+  Addresses are rebased in `Int64` because 64-bit image bases do not fit in a
+  32-bit `Int`.
+- CLR header (`Pe::clr`): runtime version string from the metadata root, plus
+  metadata size, flags and entry-point token. `.NET` assemblies are recognised
+  without decoding the metadata tables.
+- Application manifest (`Pe::manifest`, `Pe::manifest_execution_level`): the
+  raw XML and the `requestedExecutionLevel` value, so a release check can answer
+  "does this binary ask for administrator rights".
+- Three more tests: TLS callback counting, CLR runtime string, manifest
+  execution level. 26 tests total.
 ## [0.3.0] - 2026-10-21
 
 ### Added
