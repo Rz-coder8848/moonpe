@@ -298,3 +298,18 @@ fn Pe::reader_at_rva(self : Pe, rva : Int32) -> Reader? {
     None => None
   }
 }
+
+///|
+/// Convert a virtual address to an RVA using the image base.
+pub fn Pe::va_to_rva(self : Pe, address : Int32) -> Int32? {
+  let base = self.optional.image_base
+  let value = address.to_int64()
+  if value < base {
+    return None
+  }
+  let delta = value - base
+  if delta > 2147483647 {
+    return None
+  }
+  Some(delta.to_int())
+}

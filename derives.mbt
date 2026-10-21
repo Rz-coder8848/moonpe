@@ -68,3 +68,9 @@ pub extend Finding with @debug.Debug::{to_repr}
 
 ///|
 pub extend CheckReport with @debug.Debug::{to_repr}
+
+///|
+pub extend TlsInfo with @debug.Debug::{to_repr}
+
+///|
+pub extend ClrInfo with @debug.Debug::{to_repr}

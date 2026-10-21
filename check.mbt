@@ -133,19 +133,28 @@ pub fn Pe::check(self : Pe) -> CheckReport {
       })
     }
   }
-  if self.directory(9) is Some(directory) && directory.size > 0 {
-    findings.push({
-      severity: Info,
-      code: "TLS_DIRECTORY",
-      message: "TLS directory present; callbacks run before the entry point",
-    })
+  let tls = self.tls() catch { _ => None }
+  match tls {
+    Some(info) =>
+      if info.callbacks > 0 {
+        findings.push({
+          severity: Info,
+          code: "TLS_CALLBACKS",
+          message: info.callbacks.to_string() +
+          " TLS callback(s); they run before the entry point",
+        })
+      }
+    None => ()
   }
-  if self.directory(14) is Some(directory) && directory.size > 0 {
-    findings.push({
-      severity: Info,
-      code: "MANAGED",
-      message: ".NET / CLR header present",
-    })
+  let clr = self.clr() catch { _ => None }
+  match clr {
+    Some(info) =>
+      findings.push({
+        severity: Info,
+        code: "MANAGED",
+        message: ".NET runtime " + info.runtime_version,
+      })
+    None => ()
   }
   let mut high = false
   let mut warning = false

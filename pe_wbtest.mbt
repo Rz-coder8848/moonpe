@@ -398,3 +398,50 @@ test "check flags high entropy" {
     }
   }
 }
+
+///|
+/// TLS callbacks are counted through the virtual addresses in the directory.
+test "tls callbacks are counted" {
+  match try_parse(build_with_tls()) {
+    None => assert_true(false)
+    Some(pe) =>
+      match pe.tls() {
+        None => assert_true(false)
+        Some(info) => {
+          assert_eq(info.callbacks, 2)
+          assert_eq(info.raw_data_size, 16)
+        }
+      }
+  }
+}
+
+///|
+/// The CLR header exposes the runtime version string.
+test "clr header is decoded" {
+  match try_parse(build_with_clr()) {
+    None => assert_true(false)
+    Some(pe) =>
+      match pe.clr() {
+        None => assert_true(false)
+        Some(info) => {
+          assert_eq(info.runtime_version, "v4.0.30319")
+          assert_eq(info.metadata_size, 0x100)
+        }
+      }
+  }
+}
+
+///|
+/// The manifest text and its requested execution level are readable.
+test "manifest execution level is decoded" {
+  match try_parse(build_with_manifest()) {
+    None => assert_true(false)
+    Some(pe) => {
+      match pe.manifest() {
+        None => assert_true(false)
+        Some(text) => assert_true(text.contains("requireAdministrator"))
+      }
+      assert_eq(pe.manifest_execution_level(), Some("requireAdministrator"))
+    }
+  }
+}

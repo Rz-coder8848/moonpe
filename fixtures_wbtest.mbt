@@ -888,3 +888,238 @@ fn build_check_image(
   }
   Bytes::from_array(buf)
 }
+
+///|
+/// A PE32 image with a TLS directory carrying two callbacks.
+fn build_with_tls() -> Bytes {
+  let buf = blank(0x600)
+  set_u8(buf, 0, 0x4D)
+  set_u8(buf, 1, 0x5A)
+  set_u32(buf, 0x3C, 0x80)
+  set_u8(buf, 0x80, 0x50)
+  set_u8(buf, 0x81, 0x45)
+  set_u16(buf, 0x84, 0x014C)
+  set_u16(buf, 0x86, 2)
+  set_u16(buf, 0x94, 0xE0)
+  set_u16(buf, 0x96, 0x0102)
+  let mut p = 0x98
+  set_u16(buf, p, 0x10B)
+  p = p + 2
+  set_u8(buf, p, 14)
+  p = p + 2
+  p = p + 12
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u32(buf, p, 0x2000)
+  p = p + 4
+  set_u32(buf, p, 0x400000)
+  p = p + 4
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u32(buf, p, 0x200)
+  p = p + 4
+  p = p + 12
+  p = p + 4
+  set_u32(buf, p, 0x3000)
+  p = p + 4
+  set_u32(buf, p, 0x200)
+  p = p + 4
+  p = p + 4
+  set_u16(buf, p, 3)
+  p = p + 4
+  p = p + 16
+  p = p + 4
+  set_u32(buf, p, 16)
+  p = p + 4
+  set_u32(buf, p + 9 * 8, 0x2000)
+  set_u32(buf, p + 9 * 8 + 4, 24)
+  let t1 = 0x178
+  let _ = set_ascii(buf, t1, ".text")
+  set_u32(buf, t1 + 8, 0x100)
+  set_u32(buf, t1 + 12, 0x1000)
+  set_u32(buf, t1 + 16, 0x200)
+  set_u32(buf, t1 + 20, 0x200)
+  set_u32(buf, t1 + 36, 0x60000020)
+  let t2 = t1 + 40
+  let _ = set_ascii(buf, t2, ".tls")
+  set_u32(buf, t2 + 8, 0x200)
+  set_u32(buf, t2 + 12, 0x2000)
+  set_u32(buf, t2 + 16, 0x200)
+  set_u32(buf, t2 + 20, 0x400)
+  set_u32(buf, t2 + 36, 0xC0000040)
+  set_u8(buf, 0x200, 0xC3)
+  // TLS directory at file 0x400.
+  set_u32(buf, 0x400, 0x402000)
+  set_u32(buf, 0x404, 0x402010)
+  set_u32(buf, 0x408, 0x402020)
+  set_u32(buf, 0x40C, 0x402040)
+  set_u32(buf, 0x410, 0)
+  set_u32(buf, 0x414, 0)
+  // Two callbacks followed by a terminator.
+  set_u32(buf, 0x440, 0x401000)
+  set_u32(buf, 0x444, 0x401100)
+  set_u32(buf, 0x448, 0)
+  Bytes::from_array(buf)
+}
+
+///|
+/// A PE32 image carrying a CLR header and a metadata root.
+fn build_with_clr() -> Bytes {
+  let buf = blank(0x600)
+  set_u8(buf, 0, 0x4D)
+  set_u8(buf, 1, 0x5A)
+  set_u32(buf, 0x3C, 0x80)
+  set_u8(buf, 0x80, 0x50)
+  set_u8(buf, 0x81, 0x45)
+  set_u16(buf, 0x84, 0x014C)
+  set_u16(buf, 0x86, 2)
+  set_u16(buf, 0x94, 0xE0)
+  set_u16(buf, 0x96, 0x0102)
+  let mut p = 0x98
+  set_u16(buf, p, 0x10B)
+  p = p + 2
+  set_u8(buf, p, 14)
+  p = p + 2
+  p = p + 12
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u32(buf, p, 0x2000)
+  p = p + 4
+  set_u32(buf, p, 0x400000)
+  p = p + 4
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u32(buf, p, 0x200)
+  p = p + 4
+  p = p + 12
+  p = p + 4
+  set_u32(buf, p, 0x3000)
+  p = p + 4
+  set_u32(buf, p, 0x200)
+  p = p + 4
+  p = p + 4
+  set_u16(buf, p, 3)
+  p = p + 4
+  p = p + 16
+  p = p + 4
+  set_u32(buf, p, 16)
+  p = p + 4
+  set_u32(buf, p + 14 * 8, 0x2000)
+  set_u32(buf, p + 14 * 8 + 4, 72)
+  let t1 = 0x178
+  let _ = set_ascii(buf, t1, ".text")
+  set_u32(buf, t1 + 8, 0x100)
+  set_u32(buf, t1 + 12, 0x1000)
+  set_u32(buf, t1 + 16, 0x200)
+  set_u32(buf, t1 + 20, 0x200)
+  set_u32(buf, t1 + 36, 0x60000020)
+  let t2 = t1 + 40
+  let _ = set_ascii(buf, t2, ".clr")
+  set_u32(buf, t2 + 8, 0x200)
+  set_u32(buf, t2 + 12, 0x2000)
+  set_u32(buf, t2 + 16, 0x200)
+  set_u32(buf, t2 + 20, 0x400)
+  set_u32(buf, t2 + 36, 0x40000040)
+  set_u8(buf, 0x200, 0xC3)
+  // CLR header at file 0x400.
+  set_u32(buf, 0x400, 72)
+  set_u16(buf, 0x404, 2)
+  set_u16(buf, 0x406, 5)
+  set_u32(buf, 0x408, 0x2040)
+  set_u32(buf, 0x40C, 0x100)
+  set_u32(buf, 0x410, 1)
+  set_u32(buf, 0x414, 0x06000001)
+  // Metadata root at file 0x440.
+  set_u8(buf, 0x440, 0x42)
+  set_u8(buf, 0x441, 0x53)
+  set_u8(buf, 0x442, 0x4A)
+  set_u8(buf, 0x443, 0x42)
+  set_u16(buf, 0x444, 2)
+  set_u16(buf, 0x446, 5)
+  set_u32(buf, 0x44C, 12)
+  let _ = set_ascii(buf, 0x450, "v4.0.30319")
+  Bytes::from_array(buf)
+}
+
+///|
+/// A PE32 image carrying an application manifest that requests administrator
+/// rights.
+fn build_with_manifest() -> Bytes {
+  let xml = "<assembly><trustInfo><security><requestedPrivileges><requestedExecutionLevel level=\"requireAdministrator\" uiAccess=\"false\"/></requestedPrivileges></security></trustInfo></assembly>"
+  let buf = blank(0x600)
+  set_u8(buf, 0, 0x4D)
+  set_u8(buf, 1, 0x5A)
+  set_u32(buf, 0x3C, 0x80)
+  set_u8(buf, 0x80, 0x50)
+  set_u8(buf, 0x81, 0x45)
+  set_u16(buf, 0x84, 0x014C)
+  set_u16(buf, 0x86, 2)
+  set_u16(buf, 0x94, 0xE0)
+  set_u16(buf, 0x96, 0x0102)
+  let mut p = 0x98
+  set_u16(buf, p, 0x10B)
+  p = p + 2
+  set_u8(buf, p, 14)
+  p = p + 2
+  p = p + 12
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u32(buf, p, 0x2000)
+  p = p + 4
+  set_u32(buf, p, 0x400000)
+  p = p + 4
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u32(buf, p, 0x200)
+  p = p + 4
+  p = p + 12
+  p = p + 4
+  set_u32(buf, p, 0x3000)
+  p = p + 4
+  set_u32(buf, p, 0x200)
+  p = p + 4
+  p = p + 4
+  set_u16(buf, p, 3)
+  p = p + 4
+  p = p + 16
+  p = p + 4
+  set_u32(buf, p, 16)
+  p = p + 4
+  set_u32(buf, p + 2 * 8, 0x2000)
+  set_u32(buf, p + 2 * 8 + 4, 88)
+  let t1 = 0x178
+  let _ = set_ascii(buf, t1, ".text")
+  set_u32(buf, t1 + 8, 0x100)
+  set_u32(buf, t1 + 12, 0x1000)
+  set_u32(buf, t1 + 16, 0x200)
+  set_u32(buf, t1 + 20, 0x200)
+  set_u32(buf, t1 + 36, 0x60000020)
+  let t2 = t1 + 40
+  let _ = set_ascii(buf, t2, ".rsrc")
+  set_u32(buf, t2 + 8, 0x200)
+  set_u32(buf, t2 + 12, 0x2000)
+  set_u32(buf, t2 + 16, 0x200)
+  set_u32(buf, t2 + 20, 0x400)
+  set_u32(buf, t2 + 36, 0x40000040)
+  set_u8(buf, 0x200, 0xC3)
+  set_u16(buf, 0x400 + 14, 1)
+  set_u32(buf, 0x400 + 16, 24)
+  set_u32(buf, 0x400 + 20, 0x80000018)
+  set_u16(buf, 0x400 + 24 + 14, 1)
+  set_u32(buf, 0x400 + 24 + 16, 1)
+  set_u32(buf, 0x400 + 24 + 20, 0x80000030)
+  set_u16(buf, 0x400 + 48 + 14, 1)
+  set_u32(buf, 0x400 + 48 + 16, 0x409)
+  set_u32(buf, 0x400 + 48 + 20, 0x48)
+  set_u32(buf, 0x400 + 72, 0x2058)
+  set_u32(buf, 0x400 + 76, xml.length())
+  set_u32(buf, 0x400 + 80, 65001)
+  let _ = set_ascii(buf, 0x400 + 88, xml)
+  Bytes::from_array(buf)
+}
