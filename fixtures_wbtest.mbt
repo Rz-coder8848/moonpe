@@ -414,3 +414,410 @@ fn build_pe64_with_imports() -> Bytes {
   let _ = set_cstr(buf, 0x492, "Sleep")
   Bytes::from_array(buf)
 }
+
+///|
+/// A PE32 image with a delay-load import directory. `rva_based` selects the
+/// modern descriptor (address fields are RVAs) or the legacy one (address
+/// fields are virtual addresses that must be rebased).
+fn build_delay_imports(rva_based : Bool) -> Bytes {
+  let buf = blank(0x600)
+  set_u8(buf, 0, 0x4D)
+  set_u8(buf, 1, 0x5A)
+  set_u32(buf, 0x3C, 0x80)
+  set_u8(buf, 0x80, 0x50)
+  set_u8(buf, 0x81, 0x45)
+  set_u16(buf, 0x84, 0x014C)
+  set_u16(buf, 0x86, 2)
+  set_u16(buf, 0x94, 0xE0)
+  set_u16(buf, 0x96, 0x0102)
+  let mut p = 0x98
+  set_u16(buf, p, 0x10B)
+  p = p + 2
+  set_u8(buf, p, 14)
+  p = p + 2
+  p = p + 12
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u32(buf, p, 0x2000)
+  p = p + 4
+  set_u32(buf, p, 0x400000)
+  p = p + 4
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u32(buf, p, 0x200)
+  p = p + 4
+  p = p + 12
+  p = p + 4
+  set_u32(buf, p, 0x3000)
+  p = p + 4
+  set_u32(buf, p, 0x200)
+  p = p + 4
+  p = p + 4
+  set_u16(buf, p, 3)
+  p = p + 4
+  p = p + 16
+  p = p + 4
+  set_u32(buf, p, 16)
+  p = p + 4
+  // Slot 13: delay-load import directory at RVA 0x2000.
+  set_u32(buf, p + 13 * 8, 0x2000)
+  set_u32(buf, p + 13 * 8 + 4, 0x40)
+  let t1 = 0x178
+  let _ = set_ascii(buf, t1, ".text")
+  set_u32(buf, t1 + 8, 0x100)
+  set_u32(buf, t1 + 12, 0x1000)
+  set_u32(buf, t1 + 16, 0x200)
+  set_u32(buf, t1 + 20, 0x200)
+  set_u32(buf, t1 + 36, 0x60000020)
+  let t2 = t1 + 40
+  let _ = set_ascii(buf, t2, ".rdata")
+  set_u32(buf, t2 + 8, 0x200)
+  set_u32(buf, t2 + 12, 0x2000)
+  set_u32(buf, t2 + 16, 0x200)
+  set_u32(buf, t2 + 20, 0x400)
+  set_u32(buf, t2 + 36, 0x40000040)
+  set_u8(buf, 0x200, 0xC3)
+  let base = if rva_based { 0 } else { 0x400000 }
+  // Descriptor at file 0x400.
+  set_u32(buf, 0x400, if rva_based { 1 } else { 0 })
+  set_u32(buf, 0x404, base + 0x2060)
+  set_u32(buf, 0x408, 0)
+  set_u32(buf, 0x40C, base + 0x2040)
+  set_u32(buf, 0x410, base + 0x2040)
+  set_u32(buf, 0x414, 0)
+  set_u32(buf, 0x418, 0)
+  set_u32(buf, 0x41C, 0)
+  // Thunk table at 0x440: one named import.
+  set_u32(buf, 0x440, 0x2080)
+  let _ = set_cstr(buf, 0x460, "USER32.dll")
+  set_u16(buf, 0x480, 0)
+  let _ = set_cstr(buf, 0x482, "MessageBoxW")
+  Bytes::from_array(buf)
+}
+
+///|
+/// A PE32 image whose debug directory points at an `RSDS` CodeView record.
+fn build_with_debug() -> Bytes {
+  let buf = blank(0x600)
+  set_u8(buf, 0, 0x4D)
+  set_u8(buf, 1, 0x5A)
+  set_u32(buf, 0x3C, 0x80)
+  set_u8(buf, 0x80, 0x50)
+  set_u8(buf, 0x81, 0x45)
+  set_u16(buf, 0x84, 0x014C)
+  set_u16(buf, 0x86, 2)
+  set_u16(buf, 0x94, 0xE0)
+  set_u16(buf, 0x96, 0x0102)
+  let mut p = 0x98
+  set_u16(buf, p, 0x10B)
+  p = p + 2
+  set_u8(buf, p, 14)
+  p = p + 2
+  p = p + 12
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u32(buf, p, 0x2000)
+  p = p + 4
+  set_u32(buf, p, 0x400000)
+  p = p + 4
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u32(buf, p, 0x200)
+  p = p + 4
+  p = p + 12
+  p = p + 4
+  set_u32(buf, p, 0x3000)
+  p = p + 4
+  set_u32(buf, p, 0x200)
+  p = p + 4
+  p = p + 4
+  set_u16(buf, p, 3)
+  p = p + 4
+  p = p + 16
+  p = p + 4
+  set_u32(buf, p, 16)
+  p = p + 4
+  // Slot 6: debug directory at RVA 0x2000, one 28-byte entry.
+  set_u32(buf, p + 6 * 8, 0x2000)
+  set_u32(buf, p + 6 * 8 + 4, 28)
+  let t1 = 0x178
+  let _ = set_ascii(buf, t1, ".text")
+  set_u32(buf, t1 + 8, 0x100)
+  set_u32(buf, t1 + 12, 0x1000)
+  set_u32(buf, t1 + 16, 0x200)
+  set_u32(buf, t1 + 20, 0x200)
+  set_u32(buf, t1 + 36, 0x60000020)
+  let t2 = t1 + 40
+  let _ = set_ascii(buf, t2, ".rdata")
+  set_u32(buf, t2 + 8, 0x300)
+  set_u32(buf, t2 + 12, 0x2000)
+  set_u32(buf, t2 + 16, 0x300)
+  set_u32(buf, t2 + 20, 0x400)
+  set_u32(buf, t2 + 36, 0x40000040)
+  set_u8(buf, 0x200, 0xC3)
+  // Debug entry at file 0x400.
+  set_u32(buf, 0x404, 0x5F000000)
+  set_u32(buf, 0x40C, 2)
+  set_u32(buf, 0x410, 42)
+  set_u32(buf, 0x414, 0x2040)
+  set_u32(buf, 0x418, 0x440)
+  // RSDS record at file 0x440: signature, GUID, age, path.
+  let _ = set_ascii(buf, 0x440, "RSDS")
+  set_u32(buf, 0x454, 7)
+  let _ = set_cstr(buf, 0x458, "C:\\build\\demo.pdb")
+  Bytes::from_array(buf)
+}
+
+///|
+/// A PE32 image with one relocation block: two DIR64, one HIGHLOW and one
+/// ABSOLUTE padding entry.
+fn build_with_relocations() -> Bytes {
+  let buf = blank(0x600)
+  set_u8(buf, 0, 0x4D)
+  set_u8(buf, 1, 0x5A)
+  set_u32(buf, 0x3C, 0x80)
+  set_u8(buf, 0x80, 0x50)
+  set_u8(buf, 0x81, 0x45)
+  set_u16(buf, 0x84, 0x014C)
+  set_u16(buf, 0x86, 2)
+  set_u16(buf, 0x94, 0xE0)
+  set_u16(buf, 0x96, 0x0102)
+  let mut p = 0x98
+  set_u16(buf, p, 0x10B)
+  p = p + 2
+  set_u8(buf, p, 14)
+  p = p + 2
+  p = p + 12
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u32(buf, p, 0x2000)
+  p = p + 4
+  set_u32(buf, p, 0x400000)
+  p = p + 4
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u32(buf, p, 0x200)
+  p = p + 4
+  p = p + 12
+  p = p + 4
+  set_u32(buf, p, 0x3000)
+  p = p + 4
+  set_u32(buf, p, 0x200)
+  p = p + 4
+  p = p + 4
+  set_u16(buf, p, 3)
+  p = p + 4
+  p = p + 16
+  p = p + 4
+  set_u32(buf, p, 16)
+  p = p + 4
+  // Slot 5: relocations at RVA 0x2000, one 16-byte block.
+  set_u32(buf, p + 5 * 8, 0x2000)
+  set_u32(buf, p + 5 * 8 + 4, 16)
+  let t1 = 0x178
+  let _ = set_ascii(buf, t1, ".text")
+  set_u32(buf, t1 + 8, 0x100)
+  set_u32(buf, t1 + 12, 0x1000)
+  set_u32(buf, t1 + 16, 0x200)
+  set_u32(buf, t1 + 20, 0x200)
+  set_u32(buf, t1 + 36, 0x60000020)
+  let t2 = t1 + 40
+  let _ = set_ascii(buf, t2, ".reloc")
+  set_u32(buf, t2 + 8, 0x200)
+  set_u32(buf, t2 + 12, 0x2000)
+  set_u32(buf, t2 + 16, 0x200)
+  set_u32(buf, t2 + 20, 0x400)
+  set_u32(buf, t2 + 36, 0x42000040)
+  set_u8(buf, 0x200, 0xC3)
+  set_u32(buf, 0x400, 0x1000)
+  set_u32(buf, 0x404, 16)
+  set_u16(buf, 0x408, 0xA000)
+  set_u16(buf, 0x40A, 0xA008)
+  set_u16(buf, 0x40C, 0x3010)
+  set_u16(buf, 0x40E, 0x0000)
+  Bytes::from_array(buf)
+}
+
+///|
+fn push_u16(out : Array[Byte], value : Int32) -> Unit {
+  out.push(Int32::to_byte(value & 0xFF))
+  out.push(Int32::to_byte((value >> 8) & 0xFF))
+}
+
+///|
+fn push_u32(out : Array[Byte], value : Int32) -> Unit {
+  out.push(Int32::to_byte(value & 0xFF))
+  out.push(Int32::to_byte((value >> 8) & 0xFF))
+  out.push(Int32::to_byte((value >> 16) & 0xFF))
+  out.push(Int32::to_byte((value >> 24) & 0xFF))
+}
+
+///|
+fn push_utf16(out : Array[Byte], text : String) -> Int32 {
+  let mut count = 0
+  for c in text {
+    let code = Char::to_int(c)
+    push_u16(out, code)
+    count = count + 1
+  }
+  count
+}
+
+///|
+fn pad_to_4(out : Array[Byte]) -> Unit {
+  while out.length() % 4 != 0 {
+    out.push(Int32::to_byte(0))
+  }
+}
+
+///|
+/// Build one `VS_VERSIONINFO` node: header, UTF-16 key, optional value, optional
+/// children, then patch `wLength` now that the size is known.
+fn version_node(
+  key : String,
+  value_type : Int32,
+  value : Array[Byte],
+  value_length : Int32,
+  children : Array[Byte],
+) -> Array[Byte] {
+  let out : Array[Byte] = []
+  push_u16(out, 0)
+  push_u16(out, value_length)
+  push_u16(out, value_type)
+  let _ = push_utf16(out, key)
+  push_u16(out, 0)
+  pad_to_4(out)
+  for b in value {
+    out.push(b)
+  }
+  if children.length() > 0 {
+    pad_to_4(out)
+    for b in children {
+      out.push(b)
+    }
+  }
+  pad_to_4(out)
+  let length = out.length()
+  out[0] = Int32::to_byte(length & 0xFF)
+  out[1] = Int32::to_byte((length >> 8) & 0xFF)
+  out
+}
+
+///|
+fn version_string(key : String, text : String) -> Array[Byte] {
+  let value : Array[Byte] = []
+  let count = push_utf16(value, text)
+  push_u16(value, 0)
+  version_node(key, 1, value, count + 1, [])
+}
+
+///|
+/// A PE32 image carrying a `RT_VERSION` resource describing demo 1.2.3.4.
+fn build_with_version_info() -> Bytes {
+  let fixed : Array[Byte] = []
+  push_u32(fixed, 0xFEEF04BD)
+  push_u32(fixed, 0x00010000)
+  push_u32(fixed, 0x00010002)
+  push_u32(fixed, 0x00030004)
+  push_u32(fixed, 0x00010002)
+  push_u32(fixed, 0x00030004)
+  while fixed.length() < 52 {
+    fixed.push(Int32::to_byte(0))
+  }
+  let strings : Array[Byte] = []
+  for b in version_string("CompanyName", "Demo Corp") {
+    strings.push(b)
+  }
+  for b in version_string("FileVersion", "1.2.3.4") {
+    strings.push(b)
+  }
+  for b in version_string("ProductName", "Moon Demo") {
+    strings.push(b)
+  }
+  let table = version_node("040904B0", 0, [], 0, strings)
+  let sfi = version_node("StringFileInfo", 0, [], 0, table)
+  let root_node = version_node("VS_VERSION_INFO", 0, fixed, 52, sfi)
+  let buf = blank(0x600)
+  set_u8(buf, 0, 0x4D)
+  set_u8(buf, 1, 0x5A)
+  set_u32(buf, 0x3C, 0x80)
+  set_u8(buf, 0x80, 0x50)
+  set_u8(buf, 0x81, 0x45)
+  set_u16(buf, 0x84, 0x014C)
+  set_u16(buf, 0x86, 2)
+  set_u16(buf, 0x94, 0xE0)
+  set_u16(buf, 0x96, 0x0102)
+  let mut p = 0x98
+  set_u16(buf, p, 0x10B)
+  p = p + 2
+  set_u8(buf, p, 14)
+  p = p + 2
+  p = p + 12
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u32(buf, p, 0x2000)
+  p = p + 4
+  set_u32(buf, p, 0x400000)
+  p = p + 4
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u32(buf, p, 0x200)
+  p = p + 4
+  p = p + 12
+  p = p + 4
+  set_u32(buf, p, 0x3000)
+  p = p + 4
+  set_u32(buf, p, 0x200)
+  p = p + 4
+  p = p + 4
+  set_u16(buf, p, 3)
+  p = p + 4
+  p = p + 16
+  p = p + 4
+  set_u32(buf, p, 16)
+  p = p + 4
+  set_u32(buf, p + 2 * 8, 0x2000)
+  set_u32(buf, p + 2 * 8 + 4, 88)
+  let t1 = 0x178
+  let _ = set_ascii(buf, t1, ".text")
+  set_u32(buf, t1 + 8, 0x100)
+  set_u32(buf, t1 + 12, 0x1000)
+  set_u32(buf, t1 + 16, 0x200)
+  set_u32(buf, t1 + 20, 0x200)
+  set_u32(buf, t1 + 36, 0x60000020)
+  let t2 = t1 + 40
+  let _ = set_ascii(buf, t2, ".rsrc")
+  set_u32(buf, t2 + 8, 0x200)
+  set_u32(buf, t2 + 12, 0x2000)
+  set_u32(buf, t2 + 16, 0x200)
+  set_u32(buf, t2 + 20, 0x400)
+  set_u32(buf, t2 + 36, 0x40000040)
+  set_u8(buf, 0x200, 0xC3)
+  // Resource tree at file 0x400.
+  set_u16(buf, 0x400 + 14, 1)
+  set_u32(buf, 0x400 + 16, 16)
+  set_u32(buf, 0x400 + 20, 0x80000018)
+  set_u16(buf, 0x400 + 24 + 14, 1)
+  set_u32(buf, 0x400 + 24 + 16, 1)
+  set_u32(buf, 0x400 + 24 + 20, 0x80000030)
+  set_u16(buf, 0x400 + 48 + 14, 1)
+  set_u32(buf, 0x400 + 48 + 16, 0x409)
+  set_u32(buf, 0x400 + 48 + 20, 0x48)
+  set_u32(buf, 0x400 + 72, 0x2058)
+  set_u32(buf, 0x400 + 76, root_node.length())
+  set_u32(buf, 0x400 + 80, 1200)
+  let mut i = 0
+  while i < root_node.length() {
+    buf[0x400 + 88 + i] = root_node[i]
+    i = i + 1
+  }
+  Bytes::from_array(buf)
+}

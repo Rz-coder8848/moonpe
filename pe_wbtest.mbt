@@ -228,3 +228,126 @@ test "section bytes" {
       }
   }
 }
+
+///|
+/// Delay-load imports, modern descriptor: address fields are RVAs.
+test "delay imports with rva descriptors" {
+  match try_parse(build_delay_imports(true)) {
+    None => assert_true(false)
+    Some(pe) => {
+      let libraries = pe.delay_imports()
+      assert_eq(libraries.length(), 1)
+      assert_eq(libraries[0].name, "USER32.dll")
+      assert_eq(libraries[0].rva_based, true)
+      assert_eq(libraries[0].entries.length(), 1)
+      assert_eq(libraries[0].entries[0].name, Some("MessageBoxW"))
+    }
+  }
+}
+
+///|
+/// Delay-load imports, legacy descriptor: address fields are virtual addresses
+/// and must be rebased against the image base.
+test "delay imports with virtual-address descriptors" {
+  match try_parse(build_delay_imports(false)) {
+    None => assert_true(false)
+    Some(pe) => {
+      let libraries = pe.delay_imports()
+      assert_eq(libraries.length(), 1)
+      assert_eq(libraries[0].name, "USER32.dll")
+      assert_eq(libraries[0].rva_based, false)
+      assert_eq(libraries[0].entries[0].name, Some("MessageBoxW"))
+    }
+  }
+}
+
+///|
+/// Every declared data directory gets a documented name and a file mapping.
+test "data directories are named and resolved" {
+  match try_parse(build_with_debug()) {
+    None => assert_true(false)
+    Some(pe) => {
+      let dirs = pe.resolved_directories()
+      assert_eq(dirs.length(), 16)
+      assert_eq(dirs[0].name, "Export")
+      assert_eq(dirs[1].name, "Import")
+      assert_eq(dirs[6].name, "Debug")
+      assert_eq(dirs[13].name, "DelayImport")
+      assert_eq(dirs[6].virtual_address, 0x2000)
+      assert_eq(dirs[6].size, 28)
+      assert_eq(dirs[6].file_offset, Some(0x400))
+      assert_eq(dirs[0].file_offset, None)
+      assert_eq(directory_name(0), "Export")
+      assert_eq(directory_name(15), "Reserved")
+    }
+  }
+}
+
+///|
+/// The CodeView record yields the PDB path, age and signature.
+test "debug directory exposes the pdb path" {
+  match try_parse(build_with_debug()) {
+    None => assert_true(false)
+    Some(pe) => {
+      let entries = pe.debug_entries()
+      assert_eq(entries.length(), 1)
+      assert_eq(entries[0].kind_name, "CodeView")
+      assert_eq(entries[0].pdb_signature, Some("RSDS"))
+      assert_eq(entries[0].pdb_age, Some(7))
+      assert_eq(entries[0].pdb_path, Some("C:\\build\\demo.pdb"))
+    }
+  }
+}
+
+///|
+/// Relocation blocks are counted per fixup type.
+test "relocations are summarised" {
+  match try_parse(build_with_relocations()) {
+    None => assert_true(false)
+    Some(pe) => {
+      let summary = pe.relocations()
+      assert_eq(summary.blocks.length(), 1)
+      assert_eq(summary.blocks[0].page_rva, 0x1000)
+      assert_eq(summary.total_entries, 4)
+      assert_eq(summary.dir64, 2)
+      assert_eq(summary.highlow, 1)
+      assert_eq(summary.absolute, 1)
+      assert_eq(relocation_type_name(10), "DIR64")
+    }
+  }
+}
+
+///|
+/// The resource tree yields the RT_VERSION leaf.
+test "resources enumerate the version entry" {
+  match try_parse(build_with_version_info()) {
+    None => assert_true(false)
+    Some(pe) => {
+      let entries = pe.resources()
+      assert_eq(entries.length(), 1)
+      assert_eq(entries[0].type_id, Some(16))
+      assert_eq(entries[0].type_name, None)
+      assert_eq(entries[0].name_id, Some(1))
+      assert_eq(entries[0].language, 0x409)
+      assert_eq(resource_type_name(16), "VERSION")
+    }
+  }
+}
+
+///|
+/// VERSIONINFO decoding: fixed version plus the string table.
+test "version info is decoded" {
+  match try_parse(build_with_version_info()) {
+    None => assert_true(false)
+    Some(pe) =>
+      match pe.version_info() {
+        None => assert_true(false)
+        Some(info) => {
+          assert_eq(info.file_version, "1.2.3.4")
+          assert_eq(info.product_version, "1.2.3.4")
+          assert_eq(info.company_name, Some("Demo Corp"))
+          assert_eq(info.product_name, Some("Moon Demo"))
+        }
+      }
+  }
+}

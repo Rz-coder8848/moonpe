@@ -35,3 +35,24 @@ pub extend Export with @debug.Debug::{to_repr}
 
 ///|
 pub extend ExportTable with @debug.Debug::{to_repr}
+
+///|
+pub extend DelayImportLibrary with @debug.Debug::{to_repr}
+
+///|
+pub extend ResolvedDirectory with @debug.Debug::{to_repr}
+
+///|
+pub extend DebugEntry with @debug.Debug::{to_repr}
+
+///|
+pub extend RelocationBlock with @debug.Debug::{to_repr}
+
+///|
+pub extend RelocationSummary with @debug.Debug::{to_repr}
+
+///|
+pub extend ResourceEntry with @debug.Debug::{to_repr}
+
+///|
+pub extend VersionInfo with @debug.Debug::{to_repr}
