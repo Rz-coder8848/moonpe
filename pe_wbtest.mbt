@@ -351,3 +351,50 @@ test "version info is decoded" {
       }
   }
 }
+
+///|
+/// A hardened image with read-only sections produces no findings.
+test "check passes a hardened image" {
+  match try_parse(build_check_image(0x60000020, 0x0140, 0)) {
+    None => assert_true(false)
+    Some(pe) => assert_eq(pe.check().verdict, "ok")
+  }
+}
+
+///|
+/// A writable-and-executable section is a high-severity finding.
+test "check flags writable-executable sections" {
+  match try_parse(build_check_image(0xE0000020, 0x0140, 0)) {
+    None => assert_true(false)
+    Some(pe) => {
+      let report = pe.check()
+      assert_eq(report.verdict, "suspicious")
+      let mut found = false
+      for finding in report.findings {
+        if finding.code == "WX_SECTION" {
+          found = true
+        }
+      }
+      assert_true(found)
+    }
+  }
+}
+
+///|
+/// A section whose bytes are uniformly distributed is reported as packed.
+test "check flags high entropy" {
+  match try_parse(build_check_image(0x60000020, 0x0140, 1)) {
+    None => assert_true(false)
+    Some(pe) => {
+      let report = pe.check()
+      assert_eq(report.verdict, "review")
+      let mut found = false
+      for finding in report.findings {
+        if finding.code == "HIGH_ENTROPY" {
+          found = true
+        }
+      }
+      assert_true(found)
+    }
+  }
+}

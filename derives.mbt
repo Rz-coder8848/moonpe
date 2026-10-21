@@ -56,3 +56,15 @@ pub extend ResourceEntry with @debug.Debug::{to_repr}
 
 ///|
 pub extend VersionInfo with @debug.Debug::{to_repr}
+
+///|
+pub extend Severity with Eq::{equal, not_equal}
+
+///|
+pub extend Severity with @debug.Debug::{to_repr}
+
+///|
+pub extend Finding with @debug.Debug::{to_repr}
+
+///|
+pub extend CheckReport with @debug.Debug::{to_repr}

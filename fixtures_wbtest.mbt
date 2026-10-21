@@ -821,3 +821,70 @@ fn build_with_version_info() -> Bytes {
   }
   Bytes::from_array(buf)
 }
+
+///|
+/// A one-section PE32 image whose section flags, DLL characteristics and byte
+/// distribution can be varied, for exercising the check report.
+fn build_check_image(
+  section_chars : Int32,
+  dll_chars : Int32,
+  fill_pattern : Int32,
+) -> Bytes {
+  let buf = blank(0x400)
+  set_u8(buf, 0, 0x4D)
+  set_u8(buf, 1, 0x5A)
+  set_u32(buf, 0x3C, 0x80)
+  set_u8(buf, 0x80, 0x50)
+  set_u8(buf, 0x81, 0x45)
+  set_u16(buf, 0x84, 0x014C)
+  set_u16(buf, 0x86, 1)
+  set_u16(buf, 0x94, 0xE0)
+  set_u16(buf, 0x96, 0x0102)
+  let mut p = 0x98
+  set_u16(buf, p, 0x10B)
+  p = p + 2
+  set_u8(buf, p, 14)
+  p = p + 2
+  p = p + 12
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u32(buf, p, 0x2000)
+  p = p + 4
+  set_u32(buf, p, 0x400000)
+  p = p + 4
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u32(buf, p, 0x200)
+  p = p + 4
+  p = p + 12
+  p = p + 4
+  set_u32(buf, p, 0x2000)
+  p = p + 4
+  set_u32(buf, p, 0x200)
+  p = p + 4
+  p = p + 4
+  set_u16(buf, p, 3)
+  p = p + 2
+  set_u16(buf, p, dll_chars)
+  p = p + 2
+  p = p + 16
+  p = p + 4
+  set_u32(buf, p, 16)
+  let t1 = 0x178
+  let _ = set_ascii(buf, t1, ".data")
+  set_u32(buf, t1 + 8, 0x200)
+  set_u32(buf, t1 + 12, 0x1000)
+  set_u32(buf, t1 + 16, 0x200)
+  set_u32(buf, t1 + 20, 0x200)
+  set_u32(buf, t1 + 36, section_chars)
+  let mut i = 0
+  while i < 0x200 {
+    if fill_pattern == 1 {
+      set_u8(buf, 0x200 + i, i % 256)
+    }
+    i = i + 1
+  }
+  Bytes::from_array(buf)
+}
