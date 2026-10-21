@@ -1,0 +1,7 @@
+import {
+  "moonbitlang/core/env",
+  "moonbitlang/x/fs",
+  "Rz-coder8848/moonpe" @pe,
+}
+
+pkgtype(kind: "executable")
