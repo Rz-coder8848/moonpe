@@ -16,11 +16,14 @@ fn print_usage() -> Unit {
   println("usage: moonpe <command> <file>")
   println("")
   println("commands:")
-  println("  info       headers, machine, subsystem, counts")
-  println("  sections   section table with permissions")
-  println("  imports    imported DLLs and symbols")
-  println("  exports    exported symbols")
-  println("  all        everything")
+  println("  info         headers, machine, subsystem, dependency counts")
+  println("  sections     section table with permissions")
+  println("  imports      imported DLLs, including delay-loaded ones")
+  println("  exports      exported symbols")
+  println("  debug        debug directory entries and PDB paths")
+  println("  relocations  relocation blocks by fixup type")
+  println("  resources    resource tree and VERSIONINFO")
+  println("  all          everything")
 }
 
 ///|
@@ -72,6 +75,12 @@ fn run() -> Unit {
     print_imports(pe)
   } else if command == "exports" {
     print_exports(pe)
+  } else if command == "debug" {
+    print_debug(pe)
+  } else if command == "relocations" {
+    print_relocations(pe)
+  } else if command == "resources" {
+    print_resources(pe)
   } else if command == "all" {
     print_info(path, pe)
     println("")
@@ -80,6 +89,12 @@ fn run() -> Unit {
     print_imports(pe)
     println("")
     print_exports(pe)
+    println("")
+    print_debug(pe)
+    println("")
+    print_relocations(pe)
+    println("")
+    print_resources(pe)
   } else {
     fail("unknown command '" + command + "'")
     print_usage()
@@ -112,8 +127,9 @@ fn pad_left(text : String, width : Int32) -> String {
 
 ///|
 fn print_info(path : String, pe : @pe.Pe) -> Unit {
-  let import_libraries = pe.imports().length() catch { _ => 0 }
-  let export_count = try {
+  let libraries = pe.imports().length() catch { _ => 0 }
+  let delay_libraries = pe.delay_imports().length() catch { _ => 0 }
+  let exports = try {
     match pe.exports() {
       Some(table) => table.exports.length()
       None => 0
@@ -122,23 +138,18 @@ fn print_info(path : String, pe : @pe.Pe) -> Unit {
     _ => 0
   }
   println("file:      " + path)
-  println(
-    "format:    PE" + pe.bits().to_string() + " at offset 0x" + @pe.hex(0x80),
-  )
+  println("format:    PE" + pe.bits().to_string())
   println("machine:   " + pe.machine())
-  println(
-    "subsystem: " +
-    pe.subsystem() +
-    " (" +
-    pe.optional.subsystem.to_string() +
-    ")",
-  )
+  println("subsystem: " + pe.subsystem())
   println("image:     base 0x" + @pe.hex64(pe.optional.image_base))
   println("           size 0x" + @pe.hex(pe.optional.size_of_image))
   println("entry:     0x" + @pe.hex(pe.optional.entry_point))
   println("sections:  " + pe.sections.length().to_string())
-  println("imports:   " + import_libraries.to_string() + " libraries")
-  println("exports:   " + export_count.to_string() + " symbols")
+  println("imports:   " + libraries.to_string() + " libraries")
+  println("delay:     " + delay_libraries.to_string() + " libraries")
+  println("exports:   " + exports.to_string() + " symbols")
+  print_pdb_line(pe)
+  print_version_line(pe)
 }
 
 ///|
@@ -174,26 +185,48 @@ fn print_imports(pe : @pe.Pe) -> Unit {
   }
   match libraries {
     None => ()
-    Some(libs) => {
+    Some(libs) =>
       if libs.length() == 0 {
         println("(no imports)")
-        return
-      }
-      for library in libs {
-        println(library.name)
-        for entry in library.entries {
-          match entry.name {
-            Some(name) => println("  " + name)
-            None =>
-              match entry.ordinal {
-                Some(ordinal) =>
-                  println("  #" + ordinal.to_string() + " (ordinal)")
-                None => println("  ?")
-              }
+      } else {
+        for library in libs {
+          println(library.name)
+          for entry in library.entries {
+            println("  " + entry_label(entry))
           }
         }
       }
+  }
+  let delayed = Some(pe.delay_imports()) catch {
+    e => {
+      fail(e.message())
+      None
     }
+  }
+  match delayed {
+    None => ()
+    Some(libs) =>
+      if libs.length() > 0 {
+        println("delay-loaded:")
+        for library in libs {
+          println(library.name)
+          for entry in library.entries {
+            println("  " + entry_label(entry))
+          }
+        }
+      }
+  }
+}
+
+///|
+fn entry_label(entry : @pe.ImportEntry) -> String {
+  match entry.name {
+    Some(name) => name
+    None =>
+      match entry.ordinal {
+        Some(ordinal) => "#" + ordinal.to_string() + " (ordinal)"
+        None => "?"
+      }
   }
 }
 
@@ -226,6 +259,175 @@ fn print_exports(pe : @pe.Pe) -> Unit {
               @pe.hex(entry.rva),
             )
           }
+        }
+      }
+  }
+}
+
+///|
+fn print_pdb_line(pe : @pe.Pe) -> Unit {
+  let entries = Some(pe.debug_entries()) catch { _ => None }
+  match entries {
+    None => ()
+    Some(list) => {
+      let mut found = false
+      for entry in list {
+        match entry.pdb_path {
+          Some(path) =>
+            if !found {
+              println("pdb:       " + path)
+              found = true
+            }
+          None => ()
+        }
+      }
+      if !found {
+        println("pdb:       (none)")
+      }
+    }
+  }
+}
+
+///|
+fn print_version_line(pe : @pe.Pe) -> Unit {
+  let info = Some(pe.version_info()) catch { _ => None }
+  match info {
+    None => ()
+    Some(value) =>
+      match value {
+        None => println("version:   (no version resource)")
+        Some(version) => {
+          let product = match version.product_name {
+            Some(name) => name
+            None => "-"
+          }
+          println("version:   " + product + " " + version.file_version)
+        }
+      }
+  }
+}
+
+///|
+fn print_debug(pe : @pe.Pe) -> Unit {
+  let entries = Some(pe.debug_entries()) catch {
+    e => {
+      fail(e.message())
+      None
+    }
+  }
+  match entries {
+    None => ()
+    Some(list) =>
+      if list.length() == 0 {
+        println("(no debug directory)")
+      } else {
+        println(pad_right("TYPE", 24) + pad_left("AGE", 6) + "  PDB")
+        for entry in list {
+          let age = match entry.pdb_age {
+            Some(value) => value.to_string()
+            None => "-"
+          }
+          let path = match entry.pdb_path {
+            Some(value) => value
+            None => "-"
+          }
+          println(
+            pad_right(entry.kind_name, 24) + pad_left(age, 6) + "  " + path,
+          )
+        }
+      }
+  }
+}
+
+///|
+fn print_relocations(pe : @pe.Pe) -> Unit {
+  let summary = Some(pe.relocations()) catch {
+    e => {
+      fail(e.message())
+      None
+    }
+  }
+  match summary {
+    None => ()
+    Some(value) =>
+      if value.blocks.length() == 0 {
+        println("(no relocations)")
+      } else {
+        println(
+          pad_left("PAGE", 12) +
+          pad_left("ENTRIES", 9) +
+          pad_left("DIR64", 7) +
+          pad_left("HIGHLOW", 9) +
+          pad_left("OTHER", 7),
+        )
+        for block in value.blocks {
+          println(
+            pad_left("0x" + @pe.hex(block.page_rva), 12) +
+            pad_left(block.entries.to_string(), 9) +
+            pad_left(block.dir64.to_string(), 7) +
+            pad_left(block.highlow.to_string(), 9) +
+            pad_left((block.other + block.high + block.low).to_string(), 7),
+          )
+        }
+        println(
+          "total: " +
+          value.total_entries.to_string() +
+          " entries (DIR64 " +
+          value.dir64.to_string() +
+          ", HIGHLOW " +
+          value.highlow.to_string() +
+          ")",
+        )
+      }
+  }
+}
+
+///|
+fn print_resources(pe : @pe.Pe) -> Unit {
+  let entries = Some(pe.resources()) catch {
+    e => {
+      fail(e.message())
+      None
+    }
+  }
+  match entries {
+    None => ()
+    Some(list) =>
+      if list.length() == 0 {
+        println("(no resources)")
+      } else {
+        println(
+          pad_right("TYPE", 18) +
+          pad_right("NAME", 10) +
+          pad_left("LANG", 8) +
+          "  RVA/SIZE",
+        )
+        for entry in list {
+          let kind = match entry.type_id {
+            Some(id) => @pe.resource_type_name(id)
+            None =>
+              match entry.type_name {
+                Some(name) => name
+                None => "?"
+              }
+          }
+          let name = match entry.name_id {
+            Some(id) => id.to_string()
+            None =>
+              match entry.name_name {
+                Some(value) => value
+                None => "?"
+              }
+          }
+          println(
+            pad_right(kind, 18) +
+            pad_right(name, 10) +
+            pad_left("0x" + @pe.hex(entry.language), 8) +
+            "  0x" +
+            @pe.hex(entry.rva) +
+            "/" +
+            entry.size.to_string(),
+          )
         }
       }
   }
