@@ -36,7 +36,9 @@ moonar, and archive containers are absent from moonpe.
 | `demo.a` | `0  118560  "bcheck.o"` | `bad signature at 0x0: expected the 'MZ' DOS signature` |
 
 The full comparison, including the decisions a user can make from each output,
-is in [`docs/对比说明.md`](docs/对比说明.md).
+is in [`docs/对比说明.md`](docs/对比说明.md). The module layout and design
+decisions are in [`docs/架构说明.md`](docs/架构说明.md), and
+[`examples/release_check`](examples/release_check) is a runnable release gate.
 
 ## What is parsed
 
