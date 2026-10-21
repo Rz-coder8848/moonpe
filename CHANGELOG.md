@@ -4,6 +4,27 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-10-21
+
+First stable release. The completion checklist in the README is fully met.
+
+### Added
+
+- Runtime-function table (`Pe::function_table`): entry count and RVA span from
+  the exception directory.
+- Bound-import module names (`Pe::bound_imports`).
+- `entropy_range` and an in-place `Pe::section_entropy`, so a packed section is
+  scanned without copying it first.
+- Mutation fuzz test: 200 deterministic rewrites of a valid image must produce
+  `PeError` or a parse, never a panic.
+- `examples/release_check`: a runnable example that gates a release on the
+  verdict.
+- `docs/架构说明.md`: module map, data flow, invariants, performance numbers and
+  known limitations.
+
+### Changed
+
+- 29 tests in total.
 ## [0.4.0] - 2026-10-21
 
 ### Added

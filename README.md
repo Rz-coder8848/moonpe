@@ -180,7 +180,7 @@ signature go through a separate raw read, because they are not addresses.
 
 ## Testing
 
-Twenty tests, all offline: hand-built PE32 and PE32+ images with sections,
+Twenty-nine tests, all offline: hand-built PE32 and PE32+ images with sections,
 imports, delay imports (both descriptor forms), exports, debug records,
 relocations, a resource tree and `VERSIONINFO`; plus malformed inputs and a test
 that truncates a valid image at every possible length and requires a clean error
@@ -213,7 +213,7 @@ feeling:
 7. this README documents the boundary, including the directories that are
    reported by address only.
 
-All seven are met in 0.2.0.
+All seven are met in 1.0.0.
 
 ## References
 
