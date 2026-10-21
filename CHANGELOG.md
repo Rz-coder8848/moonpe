@@ -4,6 +4,37 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-10-21
+
+### Added
+
+- **Delay-load imports** (data directory 13), including both descriptor forms:
+  RVA-based (`dlattrRva` set) and virtual-address-based (fields rebased against
+  the image base). `shell32.dll` reports 138 delay-loaded libraries against 79
+  static ones, so this is not an optional extra for dependency checks.
+- Named, mapped data directories: all 16 slots with address, size and whether
+  the range maps to file bytes (`Pe::resolved_directories`).
+- Debug directory with CodeView `RSDS` / `NB10` decoding: PDB path, age and
+  signature (`Pe::debug_entries`).
+- Base relocation summary by fixup type (`Pe::relocations`).
+- Resource tree enumeration (type / name / language) and `VERSIONINFO`
+  decoding, including the `VS_FIXEDFILEINFO` version and the string table
+  (`Pe::resources`, `Pe::version_info`).
+- CLI commands: `debug`, `relocations`, `resources`; `imports` now also lists
+  delay-loaded libraries and `info` shows PDB and version.
+- `docs/对比说明.md`: the relationship to `xmyd0915/moonar`, a same-input
+  comparison, the PE32/PE32+ scope table and the definition of "complete".
+
+### Changed
+
+- The README now lists a seven-item completion checklist instead of an open
+  ended feature list.
+
+## [0.1.0] - 2026-10-20
+
+Initial development. The parser covered DOS/NT headers, the optional header for
+PE32 and PE32+, the section table, RVA mapping, imports and exports, with 13
+tests and a real `kernel32.dll` validation.
 ## [0.1.0] - 2026-10-20
 
 Initial development.

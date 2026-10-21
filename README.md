@@ -5,8 +5,9 @@
 
 A pure-MoonBit reader for **Windows PE/COFF images** — the format behind every
 `.exe`, `.dll` and `.sys` on Windows. It reads the DOS/NT headers, the section
-table, the import directory and the export directory, and reports malformed
-input with the exact byte offset instead of panicking.
+table, imports (including **delay-loaded** ones), exports, debug records with
+their PDB path, base relocations, the resource tree and `VERSIONINFO`, and it
+reports malformed input with the exact byte offset instead of panicking.
 
 ## Why this exists
 
@@ -20,25 +21,45 @@ sections rather than the file, some bytes exist in memory but not on disk, and
 import tables mix name-based and ordinal-based references. Each of those is a
 place where a naive reader silently returns wrong data.
 
+## Relationship to `xmyd0915/moonar`
+
+`moonar` is an **ar / COFF archive** library: it handles `.a`, GNU thin archives
+and Microsoft `.lib` static or import libraries. moonpe handles **PE images**
+(`.exe` / `.dll` / `.sys`). They share only the 20-byte COFF file header and
+40-byte section header that the format itself mandates; PE's DOS stub, optional
+header, data directories, import/export tables and RVA mapping are absent from
+moonar, and archive containers are absent from moonpe.
+
+| Input | moonar 0.6.1 | moonpe |
+| --- | --- | --- |
+| `kernel32.dll` | `AR001 at byte 0: expected ar archive magic` | PE64, 8 sections, 104 import libraries, 3 delay-loaded, 1697 exports |
+| `demo.a` | `0  118560  "bcheck.o"` | `bad signature at 0x0: expected the 'MZ' DOS signature` |
+
+The full comparison, including the decisions a user can make from each output,
+is in [`docs/对比说明.md`](docs/对比说明.md).
+
 ## What is parsed
 
-| Layer | Status |
+| Area | Status |
 | --- | --- |
-| DOS header (`MZ`, `e_lfanew`) | ✅ |
-| NT signature (`PE\0\0`) | ✅ |
-| COFF header (machine, sections, timestamp, characteristics) | ✅ |
-| Optional header, PE32 and PE32+ | ✅ |
-| Data directories (up to 16) | ✅ |
+| DOS header (`MZ`, `e_lfanew`) and `PE\0\0` | ✅ |
+| COFF header and optional header, PE32 and PE32+ | ✅ |
+| All 16 data directories, named and mapped to file offsets | ✅ |
 | Section table (name, sizes, addresses, permissions) | ✅ |
-| RVA → file offset (with zero-filled tail detection) | ✅ |
-| Import directory, by name and by ordinal | ✅ |
-| Export directory, named and ordinal-only | ✅ |
-| CLI: `info`, `sections`, `imports`, `exports`, `all` | ✅ |
+| RVA → file offset, rejecting the zero-filled tail | ✅ |
+| Imports by name and by ordinal | ✅ |
+| **Delay-load imports**, RVA and VA descriptor forms | ✅ |
+| Exports, including ordinal-only entries | ✅ |
+| Debug directory, CodeView `RSDS`/`NB10`, PDB path and age | ✅ |
+| Base relocations, counted by fixup type | ✅ |
+| Resource tree (type / name / language) | ✅ |
+| `VERSIONINFO`: file/product version and string table | ✅ |
+| Exception, Security, Architecture, GlobalPtr, TLS, LoadConfig, BoundImport, IAT, CLR, Reserved | address range only (by design) |
 
-Explicitly **not** implemented in 0.1.0: execution, disassembly, signature
-verification, `.NET` metadata, resources, delay-load imports, TLS callbacks and
-relocations. They are listed here so the boundary is a decision rather than a
-surprise.
+The last row is a deliberate boundary, not an omission: those directories are
+reported with their name, address and whether they map to file bytes. What is
+**not** implemented at all: execution, disassembly, signature verification,
+`.NET` metadata decoding, and writing or patching images.
 
 ## Install
 
@@ -61,25 +82,23 @@ pe.subsystem()            // "windows-console"
 pe.optional.entry_point   // 0x2c5d0
 pe.optional.image_base    // 0x180000000
 
-for section in pe.sections {
-  println(section.name + " " + section.permissions())   // ".text r-x"
-}
-
 for library in pe.imports() {
-  println(library.name)                                 // "KERNEL32.dll"
-  for entry in library.entries {
-    match entry.name {
-      Some(name) => println("  " + name)
-      None => println("  ordinal " + entry.ordinal.unwrap())
-    }
-  }
+  println(library.name)
+}
+for library in pe.delay_imports() {     // the dependencies a naive reader misses
+  println("delay: " + library.name)
+}
+for entry in pe.debug_entries() {
+  println(entry.kind_name)
+}
+for resource in pe.resources() {
+  println(resource.language.to_string())
+}
+match pe.version_info() {
+  Some(info) => println(info.file_version)
+  None => ()
 }
 ```
-
-Every function that can fail raises `PeError`, whose `message()` includes the
-offset. There is no "best effort" mode: a truncated or inconsistent file is
-rejected, because a partially parsed import table is worse than a loud failure.
-
 ## CLI
 
 The command uses `moonbitlang/x` to read the file — the library itself has no
@@ -91,26 +110,33 @@ moon run cmd/moonpe --target js -- info C:/Windows/System32/kernel32.dll
 
 ```
 file:      C:/Windows/System32/kernel32.dll
-format:    PE64 at offset 0x80
+format:    PE64
 machine:   AMD64
-subsystem: windows-console (3)
+subsystem: windows-console
 image:     base 0x180000000
            size 0xcb000
 entry:     0x2c5d0
 sections:  8
 imports:   104 libraries
+delay:     3 libraries
 exports:   1697 symbols
+pdb:       kernel32.pdb
+version:   Microsoft® Windows® Operating System 10.0.26100.9444
 ```
 
-```sh
-moon run cmd/moonpe --target js -- sections C:/Windows/System32/kernel32.dll
-```
+Commands: `info`, `sections`, `imports`, `exports`, `debug`, `relocations`,
+`resources`, `all`.
 
 ```
-NAME             VADDR     VSIZE    RAWPTR   RAWSIZE  PERM
-.text           0x1000   0x85014    0x1000   0x86000  r-x
-.rdata         0x88000   0x385b0   0x88000   0x39000  r--
-.data          0xc1000    0x16b8   0xc1000    0x1000  rw-
+$ moon run cmd/moonpe --target js -- resources C:/Windows/System32/kernel32.dll
+TYPE              NAME          LANG  RVA/SIZE
+MUI               1            0x409  0xc9458/200
+VERSION           1            0x409  0xc90b0/932
+
+$ moon run cmd/moonpe --target js -- relocations C:/Windows/System32/kernel32.dll
+        PAGE  ENTRIES  DIR64  HIGHLOW  OTHER
+     0x88000      218    217        0      0
+     0x89000      222    222        0      0
 ...
 ```
 
@@ -126,35 +152,53 @@ entries than the file can hold.
 loader) but not in the file. `rva_to_offset` returns `None` for that tail rather
 than reading whatever follows the section on disk.
 
-**Ordinals are preserved.** Real DLLs export and import symbols by ordinal, and
-a reader that only understands names drops those entries while reporting
-success. Both directions support ordinal references.
+**Ordinals and delay-load are preserved.** Real DLLs import and export symbols
+by ordinal, and many ship a large delay-load table: `shell32.dll` has 79 static
+imports and **138 delay-loaded** ones. A reader that only walks slot 1 reports
+less than half of that file's dependencies while still claiming success.
 
 **32-bit fields are read through `Int64` and range-checked.** The same source
 must behave identically when compiled for a 32-bit `Int` target and a 64-bit
-one; the reader rejects values above 2 GiB instead of letting them wrap
-differently on each platform.
+one; the reader rejects address-like values above 2 GiB instead of letting them
+wrap differently on each platform. Pure constants such as the `VS_FIXEDFILEINFO`
+signature go through a separate raw read, because they are not addresses.
 
 ## Testing
 
-Thirteen tests, all offline:
-
-- A hand-built PE32 image with two sections, one import library (one named and
-  one ordinal import) and an export directory with two named and one
-  ordinal-only export.
-- Hand-built PE32+ images exercising the widened optional header and the
-  eight-byte import thunk table.
-- Malformed inputs: missing `MZ`, missing `PE\0\0`, truncated headers, an
-  `e_lfanew` pointing outside the file, empty input.
-- A blackbox test that builds its own minimal image and only touches the public
-  API.
+Twenty tests, all offline: hand-built PE32 and PE32+ images with sections,
+imports, delay imports (both descriptor forms), exports, debug records,
+relocations, a resource tree and `VERSIONINFO`; plus malformed inputs and a test
+that truncates a valid image at every possible length and requires a clean error
+every time.
 
 ```sh
 moon test --target wasm-gc
 ```
 
-The parser is also checked by hand against the real `kernel32.dll`
-(PE64, 8 sections, 104 import libraries, 1697 exports).
+Real-binary validation (output compared against system tools):
+
+| File | Result |
+| --- | --- |
+| `System32\kernel32.dll` | PE64, 8 sections, 104 imports, 3 delay, 1697 exports |
+| `SysWOW64\kernel32.dll` | **PE32**, 6 sections, 102 imports, 3 delay, 1669 exports |
+| `System32\shell32.dll` | PE64, 79 imports, 138 delay, 843 exports |
+| `System32\notepad.exe` | PE64, 50 imports, 6 delay, 0 exports |
+
+## Completion criteria for v1.0
+
+This project defines "complete format support" as a checklist rather than a
+feeling:
+
+1. all PE32 and PE32+ optional-header fields readable, with cross-width tests;
+2. all 16 data directories named, addressed and mapped;
+3. imports, delay imports, exports and the IAT readable;
+4. sections, relocations, debug/PDB, resource tree and `VERSIONINFO` readable;
+5. arbitrary truncation and malformed input raise `PeError`, never panic;
+6. at least three real system binaries (PE32 and PE32+) validated;
+7. this README documents the boundary, including the directories that are
+   reported by address only.
+
+All seven are met in 0.2.0.
 
 ## References
 
@@ -164,9 +208,10 @@ the behaviour of established readers:
 
 | Reference | Used for | License |
 | --- | --- | --- |
-| [PE format specification](https://learn.microsoft.com/en-us/windows/win32/debug/pe-format) | header, section, import and export layouts | Microsoft documentation |
-| [goblin](https://github.com/m4b/goblin) → `pe` module | behaviour cross-check (documentation only) | MIT |
-| [pefile](https://github.com/erocarrera/pefile) | behaviour cross-check (documentation only) | MIT |
+| [PE format specification](https://learn.microsoft.com/en-us/windows/win32/debug/pe-format) | header, section, import, export, resource layouts | Microsoft documentation |
+| [goblin](https://github.com/m4b/goblin) → `pe` module | behaviour cross-check | MIT |
+| [pefile](https://github.com/erocarrera/pefile) | behaviour cross-check | MIT |
+| `xmyd0915/moonar` | adjacent archive library; relationship documented above | Apache-2.0 |
 
 ## License
 
