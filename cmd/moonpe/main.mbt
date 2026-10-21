@@ -155,6 +155,7 @@ fn print_info(path : String, pe : @pe.Pe) -> Unit {
   println("exports:   " + exports.to_string() + " symbols")
   print_pdb_line(pe)
   print_version_line(pe)
+  print_extra_lines(pe)
 }
 
 ///|
@@ -465,5 +466,25 @@ fn print_check(pe : @pe.Pe) -> Unit {
         finding.message,
       )
     }
+  }
+}
+
+///|
+fn print_extra_lines(pe : @pe.Pe) -> Unit {
+  let clr = pe.clr() catch { _ => None }
+  match clr {
+    Some(info) => println("runtime:   .NET " + info.runtime_version)
+    None => ()
+  }
+  let level = pe.manifest_execution_level() catch { _ => None }
+  match level {
+    Some(value) => println("manifest:  requestedExecutionLevel=" + value)
+    None => ()
+  }
+  let tls = pe.tls() catch { _ => None }
+  match tls {
+    Some(info) =>
+      println("tls:       " + info.callbacks.to_string() + " callback(s)")
+    None => ()
   }
 }
