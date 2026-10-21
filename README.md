@@ -213,7 +213,7 @@ feeling:
 7. this README documents the boundary, including the directories that are
    reported by address only.
 
-All seven are met in 1.0.0.
+All seven are met in 0.5.0.
 
 ## References
 

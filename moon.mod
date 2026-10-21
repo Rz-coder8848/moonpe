@@ -2,7 +2,7 @@
 
 name = "Rz-coder8848/moonpe"
 
-version = "1.0.0"
+version = "0.5.0"
 
 readme = "README.md"
 
