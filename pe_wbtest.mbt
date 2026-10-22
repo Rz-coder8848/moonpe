@@ -508,3 +508,38 @@ test "mutated images never panic" {
   }
   assert_true(true)
 }
+
+///|
+/// LoadConfig exposes the security cookie, SafeSEH metadata and CFG flags.
+test "load config is decoded" {
+  match try_parse(build_with_load_config()) {
+    None => assert_true(false)
+    Some(pe) =>
+      match pe.load_config() {
+        None => assert_true(false)
+        Some(info) => {
+          assert_eq(info.size, 0x5C)
+          assert_eq(info.security_cookie, 0x403000L)
+          assert_eq(info.seh_handler_count, 2L)
+          assert_eq(info.guard_flags, 0x100)
+        }
+      }
+  }
+}
+
+///|
+/// SafeSEH handlers are resolved from the table pointer into real RVAs.
+test "safe seh handlers are resolved" {
+  match try_parse(build_with_load_config()) {
+    None => assert_true(false)
+    Some(pe) =>
+      match pe.safe_seh_handlers() {
+        None => assert_true(false)
+        Some(handlers) => {
+          assert_eq(handlers.length(), 2)
+          assert_eq(handlers[0], 0x1010)
+          assert_eq(handlers[1], 0x1020)
+        }
+      }
+  }
+}
