@@ -23,6 +23,7 @@ fn print_usage() -> Unit {
   println("  debug        debug directory entries and PDB paths")
   println("  relocations  relocation blocks by fixup type")
   println("  resources    resource tree and VERSIONINFO")
+  println("  loadconfig   load-configuration directory (SafeSEH, CFG, cookie)")
   println("  check        release and triage findings with a verdict")
   println("  all          everything")
 }
@@ -82,6 +83,8 @@ fn run() -> Unit {
     print_relocations(pe)
   } else if command == "resources" {
     print_resources(pe)
+  } else if command == "loadconfig" {
+    print_load_config(pe)
   } else if command == "check" {
     print_check(pe)
   } else if command == "all" {
@@ -481,10 +484,59 @@ fn print_extra_lines(pe : @pe.Pe) -> Unit {
     Some(value) => println("manifest:  requestedExecutionLevel=" + value)
     None => ()
   }
+  let certificates = pe.certificates() catch { _ => [] }
+  if certificates.length() > 0 {
+    println(
+      "signed:    " +
+      certificates.length().to_string() +
+      " certificate entry(ies)",
+    )
+  }
   let tls = pe.tls() catch { _ => None }
   match tls {
     Some(info) =>
       println("tls:       " + info.callbacks.to_string() + " callback(s)")
     None => ()
+  }
+}
+
+///|
+fn print_load_config(pe : @pe.Pe) -> Unit {
+  let config = pe.load_config() catch {
+    e => {
+      fail(e.message())
+      return
+    }
+  }
+  match config {
+    None => println("(no load config)")
+    Some(info) => {
+      println("size:           0x" + @pe.hex(info.size))
+      println("security cookie: 0x" + @pe.hex64(info.security_cookie))
+      let handlers = pe.safe_seh_handlers() catch { _ => None }
+      match handlers {
+        None => println("safeseh:        not applicable (not x86)")
+        Some(list) =>
+          if list.length() == 0 {
+            println("safeseh:        no handlers recorded")
+          } else {
+            println(
+              "safeseh:        " +
+              list.length().to_string() +
+              " handler(s), first 0x" +
+              @pe.hex(list[0]),
+            )
+          }
+      }
+      println(
+        "guard flags:    0x" +
+        @pe.hex(info.guard_flags) +
+        ", table 0x" +
+        @pe.hex64(info.guard_cf_function_table) +
+        ", count " +
+        info.guard_cf_function_count.to_string(),
+      )
+      println("heap flags:     0x" + @pe.hex(info.process_heap_flags))
+    }
   }
 }
