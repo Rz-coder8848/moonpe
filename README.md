@@ -60,12 +60,15 @@ decisions are in [`docs/架构说明.md`](docs/架构说明.md), and
 | Application manifest and equestedExecutionLevel | ✅ |
 | Resource tree (type / name / language) | ✅ |
 | `VERSIONINFO`: file/product version and string table | ✅ |
-| Exception, Security, Architecture, GlobalPtr, TLS, LoadConfig, BoundImport, IAT, CLR, Reserved | address range only (by design) |
+| LoadConfig: security cookie, SafeSEH, CFG tables and flags | ✅ |
+| Certificate table entries (presence and type, not verification) | ✅ |
+| Exception function table and bound imports | ✅ summary |
+| Architecture, GlobalPtr and the reserved slot | reserved by the PE specification |
 
-The last row is a deliberate boundary, not an omission: those directories are
-reported with their name, address and whether they map to file bytes. What is
+Every directory the PE specification defines now has a declared semantic level:
+fully parsed, summarised, or reserved by the specification itself. What is
 **not** implemented at all: execution, disassembly, signature verification,
-`.NET` metadata decoding, and writing or patching images.
+`.NET` metadata table decoding, and writing or patching images.
 
 ## Install
 
@@ -182,7 +185,7 @@ signature go through a separate raw read, because they are not addresses.
 
 ## Testing
 
-Twenty-nine tests, all offline: hand-built PE32 and PE32+ images with sections,
+Thirty-one tests, all offline: hand-built PE32 and PE32+ images with sections,
 imports, delay imports (both descriptor forms), exports, debug records,
 relocations, a resource tree and `VERSIONINFO`; plus malformed inputs and a test
 that truncates a valid image at every possible length and requires a clean error
@@ -207,9 +210,9 @@ This project defines "complete format support" as a checklist rather than a
 feeling:
 
 1. all PE32 and PE32+ optional-header fields readable, with cross-width tests;
-2. all 16 data directories named, addressed and mapped;
+2. all 16 data directories named, addressed, mapped and given a semantic level;
 3. imports, delay imports, exports and the IAT readable;
-4. sections, relocations, debug/PDB, resource tree and `VERSIONINFO` readable;
+4. sections, relocations, debug/PDB, resources, `VERSIONINFO`, LoadConfig/SafeSEH and certificates readable;
 5. arbitrary truncation and malformed input raise `PeError`, never panic;
 6. at least three real system binaries (PE32 and PE32+) validated;
 7. this README documents the boundary, including the directories that are
