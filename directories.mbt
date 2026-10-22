@@ -45,6 +45,13 @@ pub fn Pe::resolved_directories(self : Pe) -> Array[ResolvedDirectory] {
   for directory in self.optional.directories {
     let file_offset = if directory.virtual_address == 0 || directory.size == 0 {
       None
+    } else if directory.index == 4 {
+      // The security directory stores a file offset rather than an RVA.
+      if directory.virtual_address + directory.size <= self.bytes.length() {
+        Some(directory.virtual_address)
+      } else {
+        None
+      }
     } else {
       self.rva_to_offset(directory.virtual_address)
     }

@@ -1199,3 +1199,86 @@ fn build_with_tables() -> Bytes {
   let _ = set_cstr(buf, 0x460, "KERNEL32.dll")
   Bytes::from_array(buf)
 }
+
+///|
+/// A PE32 image with a load-config directory that records a security cookie and
+/// a two-entry SafeSEH handler table.
+fn build_with_load_config() -> Bytes {
+  let buf = blank(0x600)
+  set_u8(buf, 0, 0x4D)
+  set_u8(buf, 1, 0x5A)
+  set_u32(buf, 0x3C, 0x80)
+  set_u8(buf, 0x80, 0x50)
+  set_u8(buf, 0x81, 0x45)
+  set_u16(buf, 0x84, 0x014C)
+  set_u16(buf, 0x86, 2)
+  set_u16(buf, 0x94, 0xE0)
+  set_u16(buf, 0x96, 0x0102)
+  let mut p = 0x98
+  set_u16(buf, p, 0x10B)
+  p = p + 2
+  set_u8(buf, p, 14)
+  p = p + 2
+  p = p + 12
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u32(buf, p, 0x2000)
+  p = p + 4
+  set_u32(buf, p, 0x400000)
+  p = p + 4
+  set_u32(buf, p, 0x1000)
+  p = p + 4
+  set_u32(buf, p, 0x200)
+  p = p + 4
+  p = p + 12
+  p = p + 4
+  set_u32(buf, p, 0x3000)
+  p = p + 4
+  set_u32(buf, p, 0x200)
+  p = p + 4
+  p = p + 4
+  set_u16(buf, p, 3)
+  p = p + 4
+  p = p + 16
+  p = p + 4
+  set_u32(buf, p, 16)
+  p = p + 4
+  set_u32(buf, p + 10 * 8, 0x2000)
+  set_u32(buf, p + 10 * 8 + 4, 0x5C)
+  let t1 = 0x178
+  let _ = set_ascii(buf, t1, ".text")
+  set_u32(buf, t1 + 8, 0x100)
+  set_u32(buf, t1 + 12, 0x1000)
+  set_u32(buf, t1 + 16, 0x200)
+  set_u32(buf, t1 + 20, 0x200)
+  set_u32(buf, t1 + 36, 0x60000020)
+  let t2 = t1 + 40
+  let _ = set_ascii(buf, t2, ".lcfg")
+  set_u32(buf, t2 + 8, 0x200)
+  set_u32(buf, t2 + 12, 0x2000)
+  set_u32(buf, t2 + 16, 0x200)
+  set_u32(buf, t2 + 20, 0x400)
+  set_u32(buf, t2 + 36, 0x40000040)
+  set_u8(buf, 0x200, 0xC3)
+  // Load config at file 0x400, 0x5C bytes.
+  set_u32(buf, 0x400, 0x5C)
+  set_u32(buf, 0x400 + 12, 0)
+  set_u32(buf, 0x400 + 16, 0)
+  set_u32(buf, 0x400 + 20, 0)
+  set_u32(buf, 0x400 + 44, 0)
+  set_u32(buf, 0x400 + 48, 0)
+  set_u16(buf, 0x400 + 52, 0)
+  set_u16(buf, 0x400 + 54, 0)
+  set_u32(buf, 0x400 + 56, 0)
+  set_u32(buf, 0x400 + 60, 0x403000)
+  set_u32(buf, 0x400 + 64, 0x402080)
+  set_u32(buf, 0x400 + 68, 2)
+  set_u32(buf, 0x400 + 88, 0x100)
+  // SafeSEH handler table at RVA 0x2080 (file 0x480), outside the 0x5C-byte
+  // load-config structure.
+  set_u32(buf, 0x480, 0x1010)
+  set_u32(buf, 0x484, 0x1020)
+  Bytes::from_array(buf)
+}

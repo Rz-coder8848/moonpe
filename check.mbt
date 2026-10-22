@@ -92,10 +92,42 @@ pub fn Pe::check(self : Pe) -> CheckReport {
       message: "HIGH_ENTROPY_VA is not set; ASLR gets 8 bits less entropy",
     })
   }
-  let signed = match self.directory(4) {
-    Some(directory) => directory.size > 0
-    None => false
+  if self.bits() == 32 {
+    let handlers = self.safe_seh_handlers() catch { _ => None }
+    match handlers {
+      Some(list) =>
+        if list.length() == 0 {
+          findings.push({
+            severity: Warning,
+            code: "NO_SAFESEH",
+            message: "x86 image records no SafeSEH handlers; structured exception handlers are not validated",
+          })
+        } else {
+          findings.push({
+            severity: Info,
+            code: "SAFESEH",
+            message: list.length().to_string() + " SafeSEH handler(s) recorded",
+          })
+        }
+      None => ()
+    }
   }
+  let config = self.load_config() catch { _ => None }
+  match config {
+    Some(info) =>
+      if info.guard_cf_function_count > 0L {
+        findings.push({
+          severity: Info,
+          code: "CFG_TABLE",
+          message: "Control Flow Guard table with " +
+          info.guard_cf_function_count.to_string() +
+          " entries",
+        })
+      }
+    None => ()
+  }
+  let certificates = self.certificates() catch { _ => [] }
+  let signed = certificates.length() > 0
   if !signed {
     findings.push({
       severity: Info,

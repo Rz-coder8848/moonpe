@@ -77,3 +77,9 @@ pub extend ClrInfo with @debug.Debug::{to_repr}
 
 ///|
 pub extend FunctionTable with @debug.Debug::{to_repr}
+
+///|
+pub extend LoadConfig with @debug.Debug::{to_repr}
+
+///|
+pub extend Certificate with @debug.Debug::{to_repr}
