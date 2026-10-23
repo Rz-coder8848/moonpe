@@ -48,7 +48,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [0.5.0] - 2026-10-21
 
 Feature-complete against the v1.0 checklist in the README. The numeric prefix
-stays .x because mooncakes.io currently rejects 1.x versions.
+stays 0.x because mooncakes.io currently rejects 1.x versions.
 
 ### Added
 
