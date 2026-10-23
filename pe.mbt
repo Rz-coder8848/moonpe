@@ -86,31 +86,51 @@ fn parse_optional_header(
       start,
     )
   }
-  r.skip(2)
-  r.skip(4)
-  r.skip(4)
-  r.skip(4)
+  let linker_version = r.u16()
+  let major_linker_version = linker_version & 0xFF
+  let minor_linker_version = linker_version >> 8
+  let size_of_code = r.u32()
+  let size_of_initialized_data = r.u32()
+  let size_of_uninitialized_data = r.u32()
   let entry_point = r.u32()
-  r.skip(4)
-  if kind == Pe32 {
-    r.skip(4)
-  }
+  let base_of_code = r.u32()
+  let base_of_data = if kind == Pe32 { Some(r.u32()) } else { None }
   let image_base = if kind == Pe32 { r.u32().to_int64() } else { r.u64() }
   let section_alignment = r.u32()
   let file_alignment = r.u32()
-  r.skip(8)
-  r.skip(4)
-  r.skip(4)
+  let major_operating_system_version = r.u16()
+  let minor_operating_system_version = r.u16()
+  let major_image_version = r.u16()
+  let minor_image_version = r.u16()
+  let major_subsystem_version = r.u16()
+  let minor_subsystem_version = r.u16()
+  let win32_version_value = r.u32()
   let size_of_image = r.u32()
   let size_of_headers = r.u32()
-  r.skip(4)
+  let checksum = r.u32()
   let subsystem = r.u16()
   let dll_characteristics = r.u16()
-  r.skip(16)
-  if kind == Pe32Plus {
-    r.skip(16)
+  let size_of_stack_reserve = if kind == Pe32 {
+    r.u32().to_int64()
+  } else {
+    r.u64()
   }
-  r.skip(4)
+  let size_of_stack_commit = if kind == Pe32 {
+    r.u32().to_int64()
+  } else {
+    r.u64()
+  }
+  let size_of_heap_reserve = if kind == Pe32 {
+    r.u32().to_int64()
+  } else {
+    r.u64()
+  }
+  let size_of_heap_commit = if kind == Pe32 {
+    r.u32().to_int64()
+  } else {
+    r.u64()
+  }
+  let loader_flags = r.u32()
   let number_of_rva_and_sizes = r.u32()
   let consumed = r.position() - start
   let available = size - consumed
@@ -132,14 +152,35 @@ fn parse_optional_header(
   }
   {
     kind,
+    major_linker_version,
+    minor_linker_version,
+    size_of_code,
+    size_of_initialized_data,
+    size_of_uninitialized_data,
     entry_point,
+    base_of_code,
+    base_of_data,
     image_base,
     section_alignment,
     file_alignment,
+    major_operating_system_version,
+    minor_operating_system_version,
+    major_image_version,
+    minor_image_version,
+    major_subsystem_version,
+    minor_subsystem_version,
+    win32_version_value,
     size_of_image,
     size_of_headers,
+    checksum,
     subsystem,
     dll_characteristics,
+    size_of_stack_reserve,
+    size_of_stack_commit,
+    size_of_heap_reserve,
+    size_of_heap_commit,
+    loader_flags,
+    number_of_rva_and_sizes,
     directories,
   }
 }

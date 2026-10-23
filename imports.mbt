@@ -19,6 +19,66 @@ pub(all) struct ImportLibrary {
 } derive(@debug.Debug)
 
 ///|
+/// One import descriptor after its three address fields have been validated.
+priv struct ImportDescriptor {
+  original_thunk : Int32
+  name_rva : Int32
+  first_thunk : Int32
+}
+
+///|
+/// Walk the import descriptors once. Import and IAT APIs share this code so
+/// their symbol ordering can never drift apart.
+fn Pe::import_descriptors(self : Pe) -> Array[ImportDescriptor] raise PeError {
+  let out : Array[ImportDescriptor] = []
+  let directory = match self.directory(1) {
+    None => return out
+    Some(directory) => directory
+  }
+  if directory.virtual_address == 0 || directory.size == 0 {
+    return out
+  }
+  let descriptor = match self.reader_at_rva(directory.virtual_address) {
+    Some(reader) => reader
+    None =>
+      raise PeError::Malformed(
+        "import directory RVA " +
+        hex(directory.virtual_address) +
+        " is not backed by file bytes",
+        0,
+      )
+  }
+  let mut index = 0
+  let mut finished = false
+  while !finished && index < 4096 {
+    let original_thunk = descriptor.u32()
+    let _timestamp = descriptor.u32()
+    let _forwarder = descriptor.u32()
+    let name_rva = descriptor.u32()
+    let first_thunk = descriptor.u32()
+    if name_rva == 0 && original_thunk == 0 && first_thunk == 0 {
+      finished = true
+    } else {
+      if name_rva == 0 {
+        raise PeError::Malformed(
+          "import descriptor has no library-name RVA",
+          descriptor.position() - 8,
+        )
+      }
+      if first_thunk == 0 {
+        raise PeError::Malformed(
+          "import descriptor has no FirstThunk (IAT) RVA",
+          descriptor.position() - 4,
+        )
+      }
+      out.push({ original_thunk, name_rva, first_thunk, })
+      index = index + 1
+    }
+  }
+  out
+}
+
+///|
 /// Read the import directory.
 ///
 /// Returns an empty array when the image has no imports. Structural problems —
@@ -27,47 +87,17 @@ pub(all) struct ImportLibrary {
 /// than a loud failure.
 pub fn Pe::imports(self : Pe) -> Array[ImportLibrary] raise PeError {
   let out : Array[ImportLibrary] = []
-  match self.directory(1) {
-    None => return out
-    Some(directory) => {
-      if directory.virtual_address == 0 || directory.size == 0 {
-        return out
-      }
-      let descriptor = match self.reader_at_rva(directory.virtual_address) {
-        Some(r) => r
-        None =>
-          raise PeError::Malformed(
-            "import directory RVA " +
-            hex(directory.virtual_address) +
-            " is not backed by file bytes",
-            0,
-          )
-      }
-      let mut index = 0
-      let mut finished = false
-      while !finished && index < 4096 {
-        let original_thunk = descriptor.u32()
-        let _timestamp = descriptor.u32()
-        let _forwarder = descriptor.u32()
-        let name_rva = descriptor.u32()
-        let first_thunk = descriptor.u32()
-        if name_rva == 0 && original_thunk == 0 && first_thunk == 0 {
-          finished = true
-        } else {
-          let library_name = self.string_at_rva(name_rva, 4096)
-          let thunk_rva = if original_thunk != 0 {
-            original_thunk
-          } else {
-            first_thunk
-          }
-          let entries = self.read_thunks(thunk_rva)
-          out.push({ name: library_name, entries, })
-          index = index + 1
-        }
-      }
-      out
+  for descriptor in self.import_descriptors() {
+    let library_name = self.string_at_rva(descriptor.name_rva, 4096)
+    let thunk_rva = if descriptor.original_thunk != 0 {
+      descriptor.original_thunk
+    } else {
+      descriptor.first_thunk
     }
+    let entries = self.read_thunks(thunk_rva)
+    out.push({ name: library_name, entries, })
   }
+  out
 }
 
 ///|

@@ -19,6 +19,7 @@ fn print_usage() -> Unit {
   println("  info         headers, machine, subsystem, dependency counts")
   println("  sections     section table with permissions")
   println("  imports      imported DLLs, including delay-loaded ones")
+  println("  iat          import address slots, symbols and raw values")
   println("  exports      exported symbols")
   println("  debug        debug directory entries and PDB paths")
   println("  relocations  relocation blocks by fixup type")
@@ -75,6 +76,8 @@ fn run() -> Unit {
     print_sections(pe)
   } else if command == "imports" {
     print_imports(pe)
+  } else if command == "iat" {
+    print_iat(pe)
   } else if command == "exports" {
     print_exports(pe)
   } else if command == "debug" {
@@ -93,6 +96,8 @@ fn run() -> Unit {
     print_sections(pe)
     println("")
     print_imports(pe)
+    println("")
+    print_iat(pe)
     println("")
     print_exports(pe)
     println("")
@@ -235,6 +240,41 @@ fn entry_label(entry : @pe.ImportEntry) -> String {
       match entry.ordinal {
         Some(ordinal) => "#" + ordinal.to_string() + " (ordinal)"
         None => "?"
+      }
+  }
+}
+
+///|
+fn print_iat(pe : @pe.Pe) -> Unit {
+  let slots = Some(pe.iat()) catch {
+    e => {
+      fail(e.message())
+      None
+    }
+  }
+  match slots {
+    None => ()
+    Some(entries) =>
+      if entries.length() == 0 {
+        println("(no IAT entries)")
+      } else {
+        println(
+          pad_right("KIND", 7) +
+          pad_right("LIBRARY", 24) +
+          pad_left("SLOT", 10) +
+          pad_left("RAW", 20) +
+          "  SYMBOL",
+        )
+        for entry in entries {
+          println(
+            pad_right(if entry.delayed { "delay" } else { "static" }, 7) +
+            pad_right(entry.library, 24) +
+            pad_left("0x" + @pe.hex(entry.slot_rva), 10) +
+            pad_left("0x" + @pe.hex64(entry.raw_value), 20) +
+            "  " +
+            entry_label(entry.symbol),
+          )
+        }
       }
   }
 }

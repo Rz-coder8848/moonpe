@@ -31,6 +31,9 @@ pub extend ImportEntry with @debug.Debug::{to_repr}
 pub extend ImportLibrary with @debug.Debug::{to_repr}
 
 ///|
+pub extend IatEntry with @debug.Debug::{to_repr}
+
+///|
 pub extend Export with @debug.Debug::{to_repr}
 
 ///|

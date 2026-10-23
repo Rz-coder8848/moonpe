@@ -29,14 +29,38 @@ pub(all) struct DataDirectory {
 /// The parsed optional header fields this library cares about.
 pub(all) struct OptionalHeader {
   kind : PeKind
+  major_linker_version : Int32
+  minor_linker_version : Int32
+  size_of_code : Int32
+  size_of_initialized_data : Int32
+  size_of_uninitialized_data : Int32
   entry_point : Int32
+  base_of_code : Int32
+  // PE32-only; PE32+ has no BaseOfData field.
+  base_of_data : Int32?
   image_base : Int64
   section_alignment : Int32
   file_alignment : Int32
+  major_operating_system_version : Int32
+  minor_operating_system_version : Int32
+  major_image_version : Int32
+  minor_image_version : Int32
+  major_subsystem_version : Int32
+  minor_subsystem_version : Int32
+  win32_version_value : Int32
   size_of_image : Int32
   size_of_headers : Int32
+  checksum : Int32
   subsystem : Int32
   dll_characteristics : Int32
+  size_of_stack_reserve : Int64
+  size_of_stack_commit : Int64
+  size_of_heap_reserve : Int64
+  size_of_heap_commit : Int64
+  loader_flags : Int32
+  // The count declared in the file; `directories` is capped at the 16
+  // documented slots and at the bytes actually present in the optional header.
+  number_of_rva_and_sizes : Int32
   directories : Array[DataDirectory]
 } derive(@debug.Debug)
 

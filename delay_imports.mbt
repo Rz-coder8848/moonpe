@@ -19,6 +19,8 @@ pub(all) struct DelayImportLibrary {
   entries : Array[ImportEntry]
   // True when the descriptor used RVA-based address fields.
   rva_based : Bool
+  // The descriptor's delay-IAT address, normalised to an RVA.
+  iat_rva : Int32?
 } derive(@debug.Debug)
 
 ///|
@@ -64,6 +66,11 @@ pub fn Pe::delay_imports(self : Pe) -> Array[DelayImportLibrary] raise PeError {
     } else {
       let rva_based = (attributes.to_int64() & 1) != 0
       let name_rva = self.delay_rva(name, rva_based)
+      let iat_rva = if iat == 0 {
+        None
+      } else {
+        Some(self.delay_rva(iat, rva_based))
+      }
       let table = if int_table != 0 {
         self.delay_rva(int_table, rva_based)
       } else {
@@ -71,7 +78,7 @@ pub fn Pe::delay_imports(self : Pe) -> Array[DelayImportLibrary] raise PeError {
       }
       let library_name = self.string_at_rva(name_rva, 4096)
       let entries = self.read_thunks(table)
-      out.push({ name: library_name, entries, rva_based, })
+      out.push({ name: library_name, entries, rva_based, iat_rva, })
       count = count + 1
     }
   }

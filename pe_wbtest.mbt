@@ -73,6 +73,37 @@ fn export_summary(bytes : Bytes) -> String {
 }
 
 ///|
+/// `dll|symbol@slot=raw|...`, for deterministic IAT assertions.
+fn iat_summary(bytes : Bytes) -> String {
+  try {
+    let pe = Pe::parse(bytes)
+    let slots = pe.iat()
+    let sb = StringBuilder()
+    for entry in slots {
+      if sb.to_string().length() > 0 {
+        sb.write_char('|')
+      }
+      sb.write_string(entry.library + "|")
+      sb.write_string(if entry.delayed { "delay:" } else { "static:" })
+      match entry.symbol.name {
+        Some(name) => sb.write_string(name)
+        None =>
+          match entry.symbol.ordinal {
+            Some(ordinal) => sb.write_string("#" + ordinal.to_string())
+            None => sb.write_string("?")
+          }
+      }
+      sb.write_string(
+        "@0x" + hex(entry.slot_rva) + "=0x" + hex64(entry.raw_value),
+      )
+    }
+    sb.to_string()
+  } catch {
+    e => "error:" + e.message()
+  }
+}
+
+///|
 /// The PE32 fixture parses into the values that were written into it.
 test "pe32 headers" {
   match try_parse(build_pe32()) {
@@ -90,6 +121,26 @@ test "pe32 headers" {
       assert_eq(pe.optional.size_of_headers, 0x200)
       assert_eq(pe.optional.directories.length(), 16)
       assert_eq(pe.coff.number_of_sections, 2)
+      assert_eq(pe.optional.major_linker_version, 14)
+      assert_eq(pe.optional.minor_linker_version, 0)
+      assert_eq(pe.optional.size_of_code, 0x200)
+      assert_eq(pe.optional.size_of_initialized_data, 0x200)
+      assert_eq(pe.optional.size_of_uninitialized_data, 0)
+      assert_eq(pe.optional.base_of_code, 0x1000)
+      assert_eq(pe.optional.base_of_data, Some(0x2000))
+      assert_eq(pe.optional.major_operating_system_version, 5)
+      assert_eq(pe.optional.minor_operating_system_version, 1)
+      assert_eq(pe.optional.major_image_version, 2)
+      assert_eq(pe.optional.minor_image_version, 3)
+      assert_eq(pe.optional.major_subsystem_version, 6)
+      assert_eq(pe.optional.win32_version_value, 0x1234)
+      assert_eq(pe.optional.checksum, 0x12345678)
+      assert_eq(pe.optional.size_of_stack_reserve, 0x200000L)
+      assert_eq(pe.optional.size_of_stack_commit, 0x2000L)
+      assert_eq(pe.optional.size_of_heap_reserve, 0x300000L)
+      assert_eq(pe.optional.size_of_heap_commit, 0x3000L)
+      assert_eq(pe.optional.loader_flags, 1)
+      assert_eq(pe.optional.number_of_rva_and_sizes, 16)
     }
   }
 }
@@ -147,6 +198,12 @@ test "pe64 headers" {
       assert_eq(pe.machine(), "AMD64")
       assert_eq(pe.optional.image_base, 0x140000000L)
       assert_eq(pe.optional.entry_point, 0x1000)
+      assert_eq(pe.optional.major_linker_version, 14)
+      assert_eq(pe.optional.base_of_code, 0x1000)
+      assert_eq(pe.optional.base_of_data, None)
+      assert_eq(pe.optional.size_of_stack_reserve, 0x100000L)
+      assert_eq(pe.optional.size_of_heap_commit, 0x1000L)
+      assert_eq(pe.optional.number_of_rva_and_sizes, 16)
       assert_eq(pe.sections.length(), 1)
       assert_eq(pe.sections[0].name, ".text")
       assert_eq(pe.rva_to_offset(0x1000), Some(0x200))
@@ -213,6 +270,85 @@ test "pe64 imports" {
 }
 
 ///|
+/// PE32 IAT slots retain their library and lookup-table symbol, while exposing
+/// the raw 32-bit value stored in each `FirstThunk` slot.
+test "pe32 iat maps slots to imported symbols" {
+  assert_eq(
+    iat_summary(build_pe32()),
+    "KERNEL32.dll|static:ExitProcess@0x2060=0x2090|KERNEL32.dll|static:#7@0x2064=0x80000007",
+  )
+}
+
+///|
+/// A FirstThunk that points outside the file is an error, not a silently empty
+/// IAT.
+test "iat rejects an unbacked slot table" {
+  let image = build_pe32()
+  let copy : Array[Byte] = []
+  let mut i = 0
+  while i < image.length() {
+    copy.push(image[i])
+    i = i + 1
+  }
+  // Import descriptor FirstThunk is at file offset 0x410.
+  set_u32(copy, 0x410, 0x7FFFF000)
+  let rejected = try {
+    let pe = Pe::parse(Bytes::from_array(copy))
+    let _ = pe.iat()
+    false
+  } catch {
+    _ => true
+  }
+  assert_true(rejected)
+}
+
+///|
+/// Delay-loaded libraries have their own IAT in slot 13. It must be returned
+/// together with the normal IAT and marked as delayed.
+test "delay iat is included and labelled" {
+  match try_parse(build_delay_imports(true)) {
+    None => assert_true(false)
+    Some(pe) => {
+      let slots = pe.iat()
+      assert_eq(slots.length(), 1)
+      assert_eq(slots[0].library, "USER32.dll")
+      assert_eq(slots[0].delayed, true)
+      assert_eq(slots[0].slot_rva, 0x2040)
+      assert_eq(slots[0].raw_value, 0x2080L)
+      assert_eq(slots[0].symbol.name, Some("MessageBoxW"))
+    }
+  }
+  match try_parse(build_delay_imports(false)) {
+    None => assert_true(false)
+    Some(pe) => {
+      let slots = pe.iat()
+      assert_eq(slots.length(), 1)
+      assert_eq(slots[0].delayed, true)
+      assert_eq(slots[0].slot_rva, 0x2040)
+      assert_eq(slots[0].raw_value, 0x2080L)
+    }
+  }
+}
+
+///|
+/// The PE32+ path reads eight-byte IAT slots and preserves the ordinal bit in
+/// the raw value.
+test "pe64 iat uses eight-byte slots" {
+  match try_parse(build_pe64_with_imports()) {
+    None => assert_true(false)
+    Some(pe) => {
+      let slots = pe.iat()
+      assert_eq(slots.length(), 2)
+      assert_eq(slots[0].delayed, false)
+      assert_eq(slots[0].slot_rva, 0x2060)
+      assert_eq(slots[0].raw_value, 0x2090L)
+      assert_eq(slots[1].slot_rva, 0x2068)
+      assert_eq(slots[1].raw_value & 0xFFFFL, 5L)
+    }
+  }
+}
+
+///|
 /// `section_bytes` returns the file-backed bytes of a section and refuses a
 /// range that lies outside the file.
 test "section bytes" {
@@ -239,6 +375,7 @@ test "delay imports with rva descriptors" {
       assert_eq(libraries.length(), 1)
       assert_eq(libraries[0].name, "USER32.dll")
       assert_eq(libraries[0].rva_based, true)
+      assert_eq(libraries[0].iat_rva, Some(0x2040))
       assert_eq(libraries[0].entries.length(), 1)
       assert_eq(libraries[0].entries[0].name, Some("MessageBoxW"))
     }
@@ -256,6 +393,7 @@ test "delay imports with virtual-address descriptors" {
       assert_eq(libraries.length(), 1)
       assert_eq(libraries[0].name, "USER32.dll")
       assert_eq(libraries[0].rva_based, false)
+      assert_eq(libraries[0].iat_rva, Some(0x2040))
       assert_eq(libraries[0].entries[0].name, Some("MessageBoxW"))
     }
   }

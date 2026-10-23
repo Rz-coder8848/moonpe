@@ -2,7 +2,7 @@
 
 name = "Rz-coder8848/moonpe"
 
-version = "0.6.0"
+version = "0.7.0"
 
 readme = "README.md"
 
@@ -23,7 +23,7 @@ keywords = [
 
 preferred_target = "wasm"
 
-description = "Pure-MoonBit reader for Windows PE/COFF images: headers, section table, imports and exports, with precise byte-offset errors instead of panics."
+description = "Pure-MoonBit Windows PE32/PE32+ reader: headers, IAT, dependencies, resources, LoadConfig and security metadata, with precise errors instead of panics."
 
 import {
   "moonbitlang/x@0.5.6",

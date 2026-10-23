@@ -45,11 +45,12 @@ decisions are in [`docs/架构说明.md`](docs/架构说明.md), and
 | Area | Status |
 | --- | --- |
 | DOS header (`MZ`, `e_lfanew`) and `PE\0\0` | ✅ |
-| COFF header and optional header, PE32 and PE32+ | ✅ |
+| COFF header and every standard optional-header field, PE32 and PE32+ | ✅ |
 | All 16 data directories, named and mapped to file offsets | ✅ |
 | Section table (name, sizes, addresses, permissions) | ✅ |
 | RVA → file offset, rejecting the zero-filled tail | ✅ |
 | Imports by name and by ordinal | ✅ |
+| Static and delay-loaded IAT slots with library, raw value and matching import | ✅ |
 | **Delay-load imports**, RVA and VA descriptor forms | ✅ |
 | Exports, including ordinal-only entries | ✅ |
 | Debug directory, CodeView `RSDS`/`NB10`, PDB path and age | ✅ |
@@ -94,6 +95,9 @@ pe.optional.image_base    // 0x180000000
 for library in pe.imports() {
   println(library.name)
 }
+for slot in pe.iat() {
+  println(slot.library + " " + slot.slot_rva.to_string())
+}
 for library in pe.delay_imports() {     // the dependencies a naive reader misses
   println("delay: " + library.name)
 }
@@ -133,8 +137,8 @@ pdb:       kernel32.pdb
 version:   Microsoft® Windows® Operating System 10.0.26100.9444
 ```
 
-Commands: `info`, `sections`, `imports`, `exports`, `debug`, `relocations`,
-`resources`, `check`, `all`.
+Commands: `info`, `sections`, `imports`, `iat`, `exports`, `debug`,
+`relocations`, `resources`, `loadconfig`, `check`, `all`.
 
 ```
 $ moon run cmd/moonpe --target js -- resources C:/Windows/System32/kernel32.dll
@@ -185,11 +189,11 @@ signature go through a separate raw read, because they are not addresses.
 
 ## Testing
 
-Thirty-one tests, all offline: hand-built PE32 and PE32+ images with sections,
-imports, delay imports (both descriptor forms), exports, debug records,
-relocations, a resource tree and `VERSIONINFO`; plus malformed inputs and a test
-that truncates a valid image at every possible length and requires a clean error
-every time.
+Thirty-five tests, all offline: hand-built PE32 and PE32+ images with every
+optional-header field, imports and IAT slots, delay imports (both descriptor
+forms), exports, debug records, relocations, a resource tree and `VERSIONINFO`;
+plus malformed inputs and a test that truncates a valid image at every possible
+length and requires a clean error every time.
 
 ```sh
 moon test --target wasm-gc
@@ -199,8 +203,8 @@ Real-binary validation (output compared against system tools):
 
 | File | Result |
 | --- | --- |
-| `System32\kernel32.dll` | PE64, 8 sections, 104 imports, 3 delay, 1697 exports |
-| `SysWOW64\kernel32.dll` | **PE32**, 6 sections, 102 imports, 3 delay, 1669 exports |
+| `System32\kernel32.dll` | PE64, 8 sections, 104 imports, 1292 IAT slots (18 delay), 1697 exports |
+| `SysWOW64\kernel32.dll` | **PE32**, 6 sections, 102 imports, 1283 IAT slots (18 delay), 1669 exports |
 | `System32\shell32.dll` | PE64, 79 imports, 138 delay, 843 exports |
 | `System32\notepad.exe` | PE64, 50 imports, 6 delay, 0 exports |
 
@@ -215,10 +219,10 @@ feeling:
 4. sections, relocations, debug/PDB, resources, `VERSIONINFO`, LoadConfig/SafeSEH and certificates readable;
 5. arbitrary truncation and malformed input raise `PeError`, never panic;
 6. at least three real system binaries (PE32 and PE32+) validated;
-7. this README documents the boundary, including the directories that are
-   reported by address only.
+7. this README documents the boundary, including summary-only and
+   specification-reserved slots.
 
-All seven are met in 0.5.0.
+All seven are met in 0.7.0.
 
 ## References
 

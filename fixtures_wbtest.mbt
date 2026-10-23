@@ -104,31 +104,31 @@ fn build_pe32() -> Bytes {
   p = p + 4
   set_u32(buf, p, 0x200)
   p = p + 4
-  set_u16(buf, p, 6)
-  set_u16(buf, p + 2, 0)
-  set_u16(buf, p + 4, 0)
-  set_u16(buf, p + 6, 0)
+  set_u16(buf, p, 5)
+  set_u16(buf, p + 2, 1)
+  set_u16(buf, p + 4, 2)
+  set_u16(buf, p + 6, 3)
   set_u16(buf, p + 8, 6)
   set_u16(buf, p + 10, 0)
   p = p + 12
-  set_u32(buf, p, 0)
+  set_u32(buf, p, 0x1234)
   p = p + 4
   set_u32(buf, p, 0x3000)
   p = p + 4
   set_u32(buf, p, 0x200)
   p = p + 4
-  set_u32(buf, p, 0)
+  set_u32(buf, p, 0x12345678)
   p = p + 4
   set_u16(buf, p, 3)
   p = p + 2
   set_u16(buf, p, 0)
   p = p + 2
-  set_u32(buf, p, 0x100000)
-  set_u32(buf, p + 4, 0x1000)
-  set_u32(buf, p + 8, 0x100000)
-  set_u32(buf, p + 12, 0x1000)
+  set_u32(buf, p, 0x200000)
+  set_u32(buf, p + 4, 0x2000)
+  set_u32(buf, p + 8, 0x300000)
+  set_u32(buf, p + 12, 0x3000)
   p = p + 16
-  set_u32(buf, p, 0)
+  set_u32(buf, p, 1)
   p = p + 4
   set_u32(buf, p, 16)
   p = p + 4
@@ -137,6 +137,9 @@ fn build_pe32() -> Bytes {
   set_u32(buf, p + 4, 0x100)
   set_u32(buf, p + 8, 0x2000)
   set_u32(buf, p + 12, 0x28)
+  // Slot 12: IAT at RVA 0x2060, two pointer-sized slots plus terminator.
+  set_u32(buf, p + 12 * 8, 0x2060)
+  set_u32(buf, p + 12 * 8 + 4, 12)
   // Section table at 0x98 + 0xE0 = 0x178.
   let t1 = 0x178
   let _ = set_ascii(buf, t1, ".text")
@@ -383,6 +386,9 @@ fn build_pe64_with_imports() -> Bytes {
   // Import directory (slot 1) at RVA 0x2000.
   set_u32(buf, p + 8, 0x2000)
   set_u32(buf, p + 12, 0x28)
+  // Slot 12: IAT at RVA 0x2060, two 8-byte slots plus terminator.
+  set_u32(buf, p + 12 * 8, 0x2060)
+  set_u32(buf, p + 12 * 8 + 4, 24)
   let t1 = 0x188
   let _ = set_ascii(buf, t1, ".text")
   set_u32(buf, t1 + 8, 0x100)
