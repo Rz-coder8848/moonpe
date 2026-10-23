@@ -181,6 +181,12 @@ by ordinal, and many ship a large delay-load table: `shell32.dll` has 79 static
 imports and **138 delay-loaded** ones. A reader that only walks slot 1 reports
 less than half of that file's dependencies while still claiming success.
 
+**IAT values are exposed as raw bits, not guessed addresses.** An unbound
+static IAT may still contain the lookup-table RVA or ordinal bit pattern, while
+a bound or delay-loaded image may contain a full virtual address. `Pe::iat`
+therefore returns the slot RVA, raw pointer-sized value, matching symbol and a
+`delayed` flag instead of assuming every slot is already resolved.
+
 **32-bit fields are read through `Int64` and range-checked.** The same source
 must behave identically when compiled for a 32-bit `Int` target and a 64-bit
 one; the reader rejects address-like values above 2 GiB instead of letting them
