@@ -13,7 +13,7 @@ fn main {
 fn print_usage() -> Unit {
   println("moonpe - inspect Windows PE images")
   println("")
-  println("usage: moonpe <command> <file>")
+  println("usage: moonpe [--json] <command> <file-or-directory>")
   println("")
   println("commands:")
   println("  info         headers, machine, subsystem, dependency counts")
@@ -24,9 +24,16 @@ fn print_usage() -> Unit {
   println("  debug        debug directory entries and PDB paths")
   println("  relocations  relocation blocks by fixup type")
   println("  resources    resource tree and VERSIONINFO")
+  println("  dotnet       CLR metadata streams and decoded tables")
   println("  loadconfig   load-configuration directory (SafeSEH, CFG, cookie)")
   println("  check        release and triage findings with a verdict")
+  println(
+    "  scan         recursively check .exe/.dll/.sys files in a directory",
+  )
   println("  all          everything")
+  println("")
+  println("global options:")
+  println("  --json       machine-readable JSON output")
 }
 
 ///|
@@ -47,28 +54,81 @@ fn run() -> Unit {
     print_usage()
     return
   }
+  let json_mode = args[base] == "--json"
+  if json_mode {
+    base = base + 1
+    if args.length() <= base {
+      if json_mode {
+        fail_json("missing command")
+      } else {
+        print_usage()
+      }
+      return
+    }
+  }
   let command = args[base]
   if command == "-h" || command == "--help" || command == "help" {
     print_usage()
     return
   }
   if args.length() <= base + 1 {
-    fail("missing file argument")
-    print_usage()
+    if json_mode {
+      fail_json("missing file or directory argument")
+    } else {
+      fail("missing file argument")
+      print_usage()
+    }
     return
   }
   let path = args[base + 1]
+  if command == "scan" {
+    run_scan(path, json_mode)
+    return
+  }
+  let known = command == "info" ||
+    command == "sections" ||
+    command == "imports" ||
+    command == "iat" ||
+    command == "exports" ||
+    command == "debug" ||
+    command == "relocations" ||
+    command == "resources" ||
+    command == "dotnet" ||
+    command == "loadconfig" ||
+    command == "check" ||
+    command == "all"
+  if !known {
+    if json_mode {
+      fail_json("unknown command '" + command + "'")
+    } else {
+      fail("unknown command '" + command + "'")
+      print_usage()
+    }
+    return
+  }
   let bytes = @fs.read_file_to_bytes(path) catch {
     _ => {
-      fail("cannot read " + path)
+      if json_mode {
+        fail_json("cannot read " + path)
+      } else {
+        fail("cannot read " + path)
+      }
       return
     }
   }
   let pe = @pe.Pe::parse(bytes) catch {
     e => {
-      fail(e.message())
+      if json_mode {
+        fail_json(e.message())
+      } else {
+        fail(e.message())
+      }
       return
     }
+  }
+  if json_mode {
+    print_json(json_for_command(path, command, pe))
+    return
   }
   if command == "info" {
     print_info(path, pe)
@@ -86,6 +146,8 @@ fn run() -> Unit {
     print_relocations(pe)
   } else if command == "resources" {
     print_resources(pe)
+  } else if command == "dotnet" {
+    print_dotnet(pe)
   } else if command == "loadconfig" {
     print_load_config(pe)
   } else if command == "check" {
@@ -107,10 +169,9 @@ fn run() -> Unit {
     println("")
     print_resources(pe)
     println("")
+    print_dotnet(pe)
+    println("")
     print_check(pe)
-  } else {
-    fail("unknown command '" + command + "'")
-    print_usage()
   }
 }
 
@@ -449,7 +510,7 @@ fn print_resources(pe : @pe.Pe) -> Unit {
           pad_right("TYPE", 18) +
           pad_right("NAME", 10) +
           pad_left("LANG", 8) +
-          "  RVA/SIZE",
+          "  RVA/SIZE  DETAIL",
         )
         for entry in list {
           let kind = match entry.type_id {
@@ -468,6 +529,9 @@ fn print_resources(pe : @pe.Pe) -> Unit {
                 None => "?"
               }
           }
+          let detail = pe.decode_resource(entry).summary catch {
+              e => "decode error: " + e.message()
+            }
           println(
             pad_right(kind, 18) +
             pad_right(name, 10) +
@@ -475,10 +539,72 @@ fn print_resources(pe : @pe.Pe) -> Unit {
             "  0x" +
             @pe.hex(entry.rva) +
             "/" +
-            entry.size.to_string(),
+            entry.size.to_string() +
+            "  " +
+            detail,
           )
         }
       }
+  }
+}
+
+///|
+fn print_dotnet(pe : @pe.Pe) -> Unit {
+  let metadata = pe.clr_metadata() catch {
+    e => {
+      fail(e.message())
+      None
+    }
+  }
+  match metadata {
+    None => println("(native image; no CLR metadata)")
+    Some(info) => {
+      let assembly = match info.assembly_name {
+        Some(name) => name
+        None => "(none)"
+      }
+      let version = match info.assembly_version {
+        Some(value) => value
+        None => "-"
+      }
+      println("assembly: " + assembly + " " + version)
+      let module_name = match info.module_name {
+        Some(name) => name
+        None => "-"
+      }
+      println("module:   " + module_name)
+      println("streams:  " + info.streams.length().to_string())
+      for stream in info.streams {
+        println(
+          "  0x" +
+          @pe.hex(stream.offset) +
+          "  " +
+          pad_left(stream.size.to_string(), 8) +
+          "  " +
+          stream.name,
+        )
+      }
+      println("tables:")
+      for table in info.tables {
+        println(
+          "  " + pad_right(table.name, 28) + pad_left(table.rows.to_string(), 8),
+        )
+      }
+      println(
+        "rows:     " +
+        info.type_definitions.length().to_string() +
+        " type definitions, " +
+        info.type_references.length().to_string() +
+        " type references, " +
+        info.method_definitions.length().to_string() +
+        " methods, " +
+        info.member_reference_names.length().to_string() +
+        " member references",
+      )
+      for reference in info.assembly_references {
+        println("ref:      " + reference.name + " " + reference.version)
+      }
+    }
   }
 }
 

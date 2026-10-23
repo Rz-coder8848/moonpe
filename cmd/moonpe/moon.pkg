@@ -1,6 +1,7 @@
 import {
   "moonbitlang/core/env",
   "moonbitlang/x/fs",
+  "moonbitlang/x/path",
   "Rz-coder8848/moonpe" @pe,
 }
 

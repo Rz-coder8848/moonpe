@@ -19,6 +19,44 @@ fn parses(bytes : Bytes) -> Bool {
 }
 
 ///|
+fn copy_bytes(bytes : Bytes) -> Array[Byte] {
+  let out : Array[Byte] = []
+  let mut i = 0
+  while i < bytes.length() {
+    out.push(bytes[i])
+    i = i + 1
+  }
+  out
+}
+
+///|
+/// Exercise every public table/parser entry point. The fuzz tests call this so
+/// that bounds bugs outside the header parser are caught as well.
+fn exercise_all_parsers(pe : Pe) -> Unit raise PeError {
+  let _ = pe.imports()
+  let _ = pe.iat()
+  let _ = pe.delay_imports()
+  let _ = pe.exports()
+  let _ = pe.debug_entries()
+  let _ = pe.relocations()
+  let _ = pe.resources()
+  let _ = pe.version_info()
+  let _ = pe.manifest()
+  let _ = pe.tls()
+  let _ = pe.clr()
+  let _ = pe.clr_metadata()
+  let _ = pe.function_table()
+  let _ = pe.bound_imports()
+  let _ = pe.load_config()
+  let _ = pe.safe_seh_handlers()
+  let _ = pe.certificates()
+  for entry in pe.resources() {
+    let _ = pe.decode_resource(entry)
+  }
+  let _ = pe.check()
+}
+
+///|
 /// `dll:name@name;#ordinal;` per library, so a wrong entry shows up in the diff.
 fn import_summary(bytes : Bytes) -> String {
   try {
@@ -173,6 +211,22 @@ test "pe32 sections" {
 }
 
 ///|
+/// Bit-pattern timestamps and PE32 image bases above 2 GiB are valid unsigned
+/// values; they must not be rejected as overflowing addresses.
+test "unsigned header fields are widened losslessly" {
+  let buf = copy_bytes(build_pe32())
+  set_u32(buf, 0x88, -1)
+  set_u32(buf, 0xB4, -1)
+  match try_parse(Bytes::from_array(buf)) {
+    None => assert_true(false)
+    Some(pe) => {
+      assert_eq(pe.coff.timestamp, 0xFFFFFFFFL)
+      assert_eq(pe.optional.image_base, 0xFFFFFFFFL)
+    }
+  }
+}
+
+///|
 /// A named import and an ordinal import from the same library.
 test "pe32 imports" {
   assert_eq(import_summary(build_pe32()), "KERNEL32.dll:ExitProcess@name;#7;")
@@ -231,9 +285,8 @@ test "malformed images are rejected" {
 }
 
 ///|
-/// Truncating a valid image at every possible length must produce a clean
-/// error. This is the cheapest way to catch an unguarded index in a format
-/// parser: any missed bounds check shows up as a panic instead of a `PeError`.
+/// Truncating a valid image at every possible length must never crash, and any
+/// prefix that still parses must survive every table parser.
 test "truncated images never panic" {
   let full = build_pe32()
   let mut length = 0
@@ -245,7 +298,8 @@ test "truncated images never panic" {
       i = i + 1
     }
     let _ = try {
-      let _ = Pe::parse(Bytes::from_array(prefix))
+      let pe = Pe::parse(Bytes::from_array(prefix))
+      exercise_all_parsers(pe)
     } catch {
       _ => ()
     }
@@ -485,6 +539,13 @@ test "version info is decoded" {
           assert_eq(info.product_version, "1.2.3.4")
           assert_eq(info.company_name, Some("Demo Corp"))
           assert_eq(info.product_name, Some("Moon Demo"))
+          let resource = pe.resources()[0]
+          let decoded = pe.decode_resource(resource)
+          assert_eq(decoded.kind, "version-info")
+          match decoded.version {
+            Some(value) => assert_eq(value.file_version, "1.2.3.4")
+            None => assert_true(false)
+          }
         }
       }
   }
@@ -563,10 +624,179 @@ test "clr header is decoded" {
         None => assert_true(false)
         Some(info) => {
           assert_eq(info.runtime_version, "v4.0.30319")
-          assert_eq(info.metadata_size, 0x100)
+          assert_eq(info.metadata_size, 0x1A0)
         }
       }
   }
+}
+
+///|
+/// The CLR metadata streams and table rows expose assembly identity, references,
+/// types and methods rather than only the runtime version string.
+test "clr metadata tables are decoded" {
+  match try_parse(build_with_clr()) {
+    None => assert_true(false)
+    Some(pe) =>
+      match pe.clr_metadata() {
+        None => assert_true(false)
+        Some(metadata) => {
+          assert_eq(metadata.streams.length(), 2)
+          assert_eq(metadata.streams[0].name, "#~")
+          assert_eq(metadata.streams[1].name, "#Strings")
+          assert_eq(metadata.tables.length(), 5)
+          assert_eq(metadata.tables[0].name, "Module")
+          assert_eq(metadata.tables[0].rows, 1)
+          assert_eq(metadata.module_name, Some("demo.exe"))
+          assert_eq(metadata.assembly_name, Some("Demo.Assembly"))
+          assert_eq(metadata.assembly_version, Some("1.2.3.4"))
+          assert_eq(metadata.assembly_references.length(), 1)
+          assert_eq(metadata.assembly_references[0].name, "System.Runtime")
+          assert_eq(metadata.type_definitions.length(), 1)
+          assert_eq(metadata.type_definitions[0].namespace_name, "Demo")
+          assert_eq(metadata.type_definitions[0].name, "DemoType")
+          assert_eq(metadata.method_definitions.length(), 1)
+          assert_eq(metadata.method_definitions[0].name, "Run")
+          assert_eq(metadata.method_definitions[0].rva, 0x1000)
+        }
+      }
+  }
+}
+
+///|
+/// Coded-index width depends on the number of tag bits, not only on the total
+/// row count. This catches the classic metadata-table offset error.
+test "coded metadata indexes reserve their tag bits" {
+  let rows = zero_rows()
+  rows[6] = 2047
+  assert_eq(metadata_coded_width(2, rows, false), 2)
+  rows[6] = 2048
+  assert_eq(metadata_coded_width(2, rows, false), 4)
+  rows[6] = 0
+  rows[2] = 8191
+  assert_eq(metadata_coded_width(5, rows, false), 2)
+  rows[2] = 8192
+  assert_eq(metadata_coded_width(5, rows, false), 4)
+}
+
+///|
+/// Common resource payloads expose usable data: STRING entries, bitmap/icon
+/// dimensions, GROUP_ICON members and manifest text.
+test "common resource content is decoded" {
+  let image = build_pe32()
+  let buf = copy_bytes(image)
+  // STRING block: ID 0 = "Hi", followed by empty slots.
+  set_u16(buf, 0x4A0, 2)
+  set_u16(buf, 0x4A2, 0x48)
+  set_u16(buf, 0x4A4, 0x69)
+  // BITMAPINFOHEADER: 32x32, 32 bpp (stored height is doubled).
+  set_u32(buf, 0x4C8, 40)
+  set_u32(buf, 0x4CC, 32)
+  set_u32(buf, 0x4D0, 64)
+  set_u16(buf, 0x4D4, 1)
+  set_u16(buf, 0x4D6, 32)
+  // PNG icon: signature and IHDR dimensions 48x64.
+  set_u8(buf, 0x4F0, 0x89)
+  set_u8(buf, 0x4F1, 0x50)
+  set_u8(buf, 0x4F2, 0x4E)
+  set_u8(buf, 0x4F3, 0x47)
+  set_u8(buf, 0x4F4, 0x0D)
+  set_u8(buf, 0x4F5, 0x0A)
+  set_u8(buf, 0x4F6, 0x1A)
+  set_u8(buf, 0x4F7, 0x0A)
+  set_u8(buf, 0x4FB, 13)
+  set_u8(buf, 0x4FC, 0x49)
+  set_u8(buf, 0x4FD, 0x48)
+  set_u8(buf, 0x4FE, 0x44)
+  set_u8(buf, 0x4FF, 0x52)
+  set_u8(buf, 0x503, 48)
+  set_u8(buf, 0x507, 64)
+  // GROUP_ICON with one 256x256 member pointing at resource 3.
+  set_u16(buf, 0x520, 0)
+  set_u16(buf, 0x522, 1)
+  set_u16(buf, 0x524, 1)
+  set_u8(buf, 0x526, 0)
+  set_u8(buf, 0x527, 0)
+  set_u16(buf, 0x52A, 1)
+  set_u16(buf, 0x52C, 32)
+  set_u32(buf, 0x52E, 40)
+  set_u16(buf, 0x532, 3)
+  // MANIFEST text.
+  let manifest = "<assembly><trustInfo/></assembly>"
+  let _ = set_ascii(buf, 0x540, manifest)
+  let pe = Pe::parse(Bytes::from_array(buf)) catch {
+    _ => {
+      assert_true(false)
+      return
+    }
+  }
+  let string_entry : ResourceEntry = {
+    type_id: Some(6),
+    type_name: None,
+    name_id: Some(1),
+    name_name: None,
+    language: 0x409,
+    rva: 0x20A0,
+    size: 16,
+    code_page: 1200,
+  }
+  let strings = pe.decode_resource(string_entry)
+  assert_eq(strings.strings.length(), 1)
+  assert_eq(strings.strings[0].id, 0)
+  assert_eq(strings.strings[0].text, "Hi")
+  let bitmap_entry : ResourceEntry = {
+    type_id: Some(2),
+    type_name: None,
+    name_id: Some(1),
+    name_name: None,
+    language: 0x409,
+    rva: 0x20C8,
+    size: 40,
+    code_page: 0,
+  }
+  let bitmap = pe.decode_resource(bitmap_entry)
+  assert_eq(bitmap.width, Some(32))
+  assert_eq(bitmap.height, Some(32))
+  assert_eq(bitmap.bit_count, Some(32))
+  let icon_entry : ResourceEntry = {
+    type_id: Some(3),
+    type_name: None,
+    name_id: Some(1),
+    name_name: None,
+    language: 0x409,
+    rva: 0x20F0,
+    size: 24,
+    code_page: 0,
+  }
+  let icon = pe.decode_resource(icon_entry)
+  assert_eq(icon.png, true)
+  assert_eq(icon.width, Some(48))
+  assert_eq(icon.height, Some(64))
+  let group_entry : ResourceEntry = {
+    type_id: Some(14),
+    type_name: None,
+    name_id: Some(1),
+    name_name: None,
+    language: 0x409,
+    rva: 0x2120,
+    size: 20,
+    code_page: 0,
+  }
+  let group = pe.decode_resource(group_entry)
+  assert_eq(group.group_icons.length(), 1)
+  assert_eq(group.group_icons[0].width, 256)
+  assert_eq(group.group_icons[0].resource_id, 3)
+  let manifest_entry : ResourceEntry = {
+    type_id: Some(24),
+    type_name: None,
+    name_id: Some(1),
+    name_name: None,
+    language: 0x409,
+    rva: 0x2140,
+    size: manifest.length(),
+    code_page: 65001,
+  }
+  let decoded_manifest = pe.decode_resource(manifest_entry)
+  assert_eq(decoded_manifest.text, Some(manifest))
 }
 
 ///|
@@ -615,20 +845,21 @@ test "bound imports are listed" {
 }
 
 ///|
-/// Deterministically mutate a valid image and require that every attempt either
-/// parses or raises `PeError`. A panic here would be an unguarded index in the
-/// parser; the test fails loudly if one appears.
+/// Deterministically mutate several valid PE layouts and exercise every parser
+/// on each successfully parsed candidate. A panic fails the test immediately.
 test "mutated images never panic" {
-  let base = build_pe32()
+  let bases = [
+    build_pe32(),
+    build_with_version_info(),
+    build_with_load_config(),
+    build_with_clr(),
+    build_delay_imports(true),
+  ]
   let mut seed = 0x12345678
   let mut round = 0
-  while round < 200 {
-    let copy : Array[Byte] = []
-    let mut i = 0
-    while i < base.length() {
-      copy.push(base[i])
-      i = i + 1
-    }
+  while round < 500 {
+    let base = bases[round % bases.length()]
+    let copy = copy_bytes(base)
     let mut k = 0
     while k < 4 {
       seed = (seed * 1103515245 + 12345) & 0x7FFFFFFF
@@ -638,7 +869,8 @@ test "mutated images never panic" {
       k = k + 1
     }
     let _ = try {
-      let _ = Pe::parse(Bytes::from_array(copy))
+      let pe = Pe::parse(Bytes::from_array(copy))
+      exercise_all_parsers(pe)
     } catch {
       _ => ()
     }

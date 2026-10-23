@@ -86,3 +86,30 @@ pub extend LoadConfig with @debug.Debug::{to_repr}
 
 ///|
 pub extend Certificate with @debug.Debug::{to_repr}
+
+///|
+pub extend ResourceString with @debug.Debug::{to_repr}
+
+///|
+pub extend GroupIconMember with @debug.Debug::{to_repr}
+
+///|
+pub extend ResourceContent with @debug.Debug::{to_repr}
+
+///|
+pub extend MetadataStream with @debug.Debug::{to_repr}
+
+///|
+pub extend MetadataTable with @debug.Debug::{to_repr}
+
+///|
+pub extend MetadataType with @debug.Debug::{to_repr}
+
+///|
+pub extend MetadataMethod with @debug.Debug::{to_repr}
+
+///|
+pub extend MetadataAssemblyReference with @debug.Debug::{to_repr}
+
+///|
+pub extend ClrMetadata with @debug.Debug::{to_repr}

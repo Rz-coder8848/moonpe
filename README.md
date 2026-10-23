@@ -6,8 +6,8 @@
 A pure-MoonBit reader for **Windows PE/COFF images** — the format behind every
 `.exe`, `.dll` and `.sys` on Windows. It reads the DOS/NT headers, the section
 table, imports (including **delay-loaded** ones), exports, debug records with
-their PDB path, base relocations, the resource tree and `VERSIONINFO`, and it
-reports malformed input with the exact byte offset instead of panicking.
+their PDB path, base relocations, resources and .NET metadata, and reports
+malformed input with the exact byte offset instead of panicking.
 
 ## Why this exists
 
@@ -58,8 +58,10 @@ decisions are in [`docs/架构说明.md`](docs/架构说明.md), and
 | Section entropy and a release/triage check with a verdict | ✅ |
 | TLS directory and callback count | ✅ |
 | CLR header and .NET runtime version | ✅ |
-| Application manifest and equestedExecutionLevel | ✅ |
+| .NET metadata streams, table counts, assembly refs, types and methods | ✅ |
+| Application manifest and `requestedExecutionLevel` | ✅ |
 | Resource tree (type / name / language) | ✅ |
+| STRING, bitmap/icon dimensions, icon groups and manifest content | ✅ |
 | `VERSIONINFO`: file/product version and string table | ✅ |
 | LoadConfig: security cookie, SafeSEH, CFG tables and flags | ✅ |
 | Certificate table entries (presence and type, not verification) | ✅ |
@@ -68,8 +70,8 @@ decisions are in [`docs/架构说明.md`](docs/架构说明.md), and
 
 Every directory the PE specification defines now has a declared semantic level:
 fully parsed, summarised, or reserved by the specification itself. What is
-**not** implemented at all: execution, disassembly, signature verification,
-`.NET` metadata table decoding, and writing or patching images.
+**not** implemented: execution, disassembly, IL decoding, signature
+verification, icon pixel rendering, and writing or patching images.
 
 ## Install
 
@@ -105,11 +107,16 @@ for entry in pe.debug_entries() {
   println(entry.kind_name)
 }
 for resource in pe.resources() {
-  println(resource.language.to_string())
+  let content = pe.decode_resource(resource)
+  println(content.kind + ": " + content.summary)
 }
 match pe.version_info() {
   Some(info) => println(info.file_version)
   None => ()
+}
+match pe.clr_metadata() {
+  Some(metadata) => println(metadata.assembly_name)
+  None => println("native image")
 }
 ```
 ## CLI
@@ -138,20 +145,19 @@ version:   Microsoft® Windows® Operating System 10.0.26100.9444
 ```
 
 Commands: `info`, `sections`, `imports`, `iat`, `exports`, `debug`,
-`relocations`, `resources`, `loadconfig`, `check`, `all`.
+`relocations`, `resources`, `dotnet`, `loadconfig`, `check`, `all`, and
+the recursive `scan`. Add `--json` before the command for automation.
 
-```
+```sh
 $ moon run cmd/moonpe --target js -- resources C:/Windows/System32/kernel32.dll
-TYPE              NAME          LANG  RVA/SIZE
-MUI               1            0x409  0xc9458/200
-VERSION           1            0x409  0xc90b0/932
+TYPE              NAME          LANG  RVA/SIZE  DETAIL
+MUI               1            0x409  0xc9458/200  200 byte(s), not decoded
+VERSION           1            0x409  0xc90b0/932  file 10.0.26100.9444, ...
 
 $ moon run cmd/moonpe --target js -- relocations C:/Windows/System32/kernel32.dll
         PAGE  ENTRIES  DIR64  HIGHLOW  OTHER
      0x88000      218    217        0      0
      0x89000      222    222        0      0
-...
-```
 
 $ moon run cmd/moonpe --target js -- check C:/Windows/System32/kernel32.dll
 verdict:   ok
@@ -159,6 +165,19 @@ max entropy: 625 / 800
   [INFO] DELAY_IMPORTS     3 delay-loaded libraries; static-only dependency checks miss these
   [INFO] CAPABILITIES      imports CreateRemoteThreadEx, VirtualAllocEx, ... (loader APIs)
 ```
+
+JSON output is one object per invocation and uses hexadecimal strings for
+addresses. Directory scans recursively inspect `.exe`, `.dll`, `.sys`, `.ocx`,
+`.cpl` and `.scr` files:
+
+```sh
+moon run cmd/moonpe --target js -- --json check C:/Windows/System32/notepad.exe
+moon run cmd/moonpe --target js -- --json scan C:/Windows/System32/WindowsPowerShell
+```
+
+The scan summary separates `ok`, `review`, `suspicious`, read/parse errors and
+PE32/PE64 counts. Each file entry also includes dependency, IAT, CFG and
+managed-assembly status.
 
 The check deliberately treats those imports as a *capability*, not a verdict:
 `kernel32.dll` imports most of the list and still comes out `ok`. It only
@@ -195,14 +214,14 @@ signature go through a separate raw read, because they are not addresses.
 
 ## Testing
 
-Thirty-five tests, all offline: hand-built PE32 and PE32+ images with every
-optional-header field, imports and IAT slots, delay imports (both descriptor
-forms), exports, debug records, relocations, a resource tree and `VERSIONINFO`;
-plus malformed inputs and a test that truncates a valid image at every possible
-length and requires a clean error every time.
+Forty-two tests, all offline: hand-built PE32 and PE32+ images with every
+optional-header field, static/delay IAT slots, resources and CLR metadata
+tables. Every successfully parsed truncation/mutation is sent through all public
+table parsers; 500 deterministic mutation rounds must never panic.
 
 ```sh
-moon test --target wasm-gc
+moon test --deny-warn --target wasm-gc
+moon test --deny-warn --target wasm
 ```
 
 Real-binary validation (output compared against system tools):
@@ -213,6 +232,9 @@ Real-binary validation (output compared against system tools):
 | `SysWOW64\kernel32.dll` | **PE32**, 6 sections, 102 imports, 1283 IAT slots (18 delay), 1669 exports |
 | `System32\shell32.dll` | PE64, 79 imports, 138 delay, 843 exports |
 | `System32\notepad.exe` | PE64, 50 imports, 6 delay, 0 exports |
+| `mscorlib.dll` | 31 tables, 3356 types, 29257 methods, assembly `mscorlib 4.0.0.0` |
+| `System.Core.dll` | 33 tables, 1176 types, 498 type refs, 5 assembly refs |
+| `WindowsPowerShell\v1.0` scan | 59/59 files recognised, 40 PE32 and 19 PE64 |
 
 ## Completion criteria for v1.0
 
@@ -223,12 +245,14 @@ feeling:
 2. all 16 data directories named, addressed, mapped and given a semantic level;
 3. imports, delay imports, exports and the IAT readable;
 4. sections, relocations, debug/PDB, resources, `VERSIONINFO`, LoadConfig/SafeSEH and certificates readable;
-5. arbitrary truncation and malformed input raise `PeError`, never panic;
-6. at least three real system binaries (PE32 and PE32+) validated;
-7. this README documents the boundary, including summary-only and
+5. common resource payloads and .NET metadata tables decoded, not just addressed;
+6. arbitrary truncation and malformed input raise `PeError`, never panic;
+7. at least three real system binaries (native and managed, PE32 and PE32+)
+   validated;
+8. this README documents the boundary, including summary-only and
    specification-reserved slots.
 
-All seven are met in 0.7.0.
+All eight are met in 0.8.0.
 
 ## References
 
@@ -239,6 +263,7 @@ the behaviour of established readers:
 | Reference | Used for | License |
 | --- | --- | --- |
 | [PE format specification](https://learn.microsoft.com/en-us/windows/win32/debug/pe-format) | header, section, import, export, resource layouts | Microsoft documentation |
+| [ECMA-335 metadata](https://ecma-international.org/publications-and-standards/standards/ecma-335/) | CLR streams, tables and coded indexes | ECMA standard |
 | [goblin](https://github.com/m4b/goblin) → `pe` module | behaviour cross-check | MIT |
 | [pefile](https://github.com/erocarrera/pefile) | behaviour cross-check | MIT |
 | `xmyd0915/moonar` | adjacent archive library; relationship documented above | Apache-2.0 |

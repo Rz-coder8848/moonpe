@@ -51,6 +51,14 @@ fn Reader::need(self : Reader, count : Int32) -> Unit raise PeError {
 }
 
 ///|
+fn Reader::u8(self : Reader) -> Int32 raise PeError {
+  self.need(1)
+  let value = self.bytes[self.pos].to_int()
+  self.pos = self.pos + 1
+  value
+}
+
+///|
 fn Reader::u16(self : Reader) -> Int32 raise PeError {
   self.need(2)
   let b0 = self.bytes[self.pos].to_int()
@@ -98,6 +106,12 @@ fn Reader::u32_raw(self : Reader) -> Int32 raise PeError {
   let b3 = self.bytes[self.pos + 3].to_int()
   self.pos = self.pos + 4
   b0 | (b1 << 8) | (b2 << 16) | (b3 << 24)
+}
+
+///|
+/// Little-endian unsigned 32-bit value widened losslessly into `Int64`.
+fn Reader::u32_unsigned(self : Reader) -> Int64 raise PeError {
+  self.u32_raw().to_int64() & 0xFFFFFFFFL
 }
 
 ///|

@@ -4,6 +4,30 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-10-23
+
+### Added
+
+- Stable `--json` output for every single-file command. Address-like fields use
+  hexadecimal strings so large values survive JavaScript consumers.
+- Recursive `scan` command for `.exe`, `.dll`, `.sys`, `.ocx`, `.cpl` and
+  `.scr` files, with per-file findings and PE32/PE64/error totals.
+- ECMA-335 metadata decoding: `#~`/`#-` stream directories, table row counts,
+  assembly identity, assembly references, type definitions/references, method
+  definitions and member-reference names.
+- Resource content decoding for `RT_STRING`, bitmap/icon dimensions,
+  `GROUP_ICON` members, manifests and per-entry `VERSIONINFO`.
+- All public table parsers are now exercised by truncation and 500-round
+  mutation tests. The suite contains 42 tests on wasm and wasm-gc, including
+  JSON and scan-report checks.
+
+### Fixed
+
+- COFF timestamps and PE32 image bases are unsigned bit patterns. Values above
+  2 GiB no longer reject otherwise valid PE64 images.
+- Metadata coded-index widths now reserve their tag bits, preventing table-row
+  offsets from drifting in larger assemblies.
+
 ## [0.7.0] - 2026-10-23
 
 ### Added

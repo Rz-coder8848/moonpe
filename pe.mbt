@@ -43,7 +43,7 @@ pub fn Pe::parse(bytes : Bytes) -> Pe raise PeError {
   }
   let machine = r.u16()
   let number_of_sections = r.u16()
-  let timestamp = r.u32()
+  let timestamp = r.u32_unsigned()
   r.skip(8)
   let size_of_optional_header = r.u16()
   let characteristics = r.u16()
@@ -95,7 +95,7 @@ fn parse_optional_header(
   let entry_point = r.u32()
   let base_of_code = r.u32()
   let base_of_data = if kind == Pe32 { Some(r.u32()) } else { None }
-  let image_base = if kind == Pe32 { r.u32().to_int64() } else { r.u64() }
+  let image_base = if kind == Pe32 { r.u32_unsigned() } else { r.u64() }
   let section_alignment = r.u32()
   let file_alignment = r.u32()
   let major_operating_system_version = r.u16()
@@ -107,7 +107,7 @@ fn parse_optional_header(
   let win32_version_value = r.u32()
   let size_of_image = r.u32()
   let size_of_headers = r.u32()
-  let checksum = r.u32()
+  let checksum = r.u32_raw()
   let subsystem = r.u16()
   let dll_characteristics = r.u16()
   let size_of_stack_reserve = if kind == Pe32 {

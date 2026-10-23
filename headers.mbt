@@ -12,7 +12,7 @@ pub(all) enum PeKind {
 pub(all) struct CoffHeader {
   machine : Int32
   number_of_sections : Int32
-  timestamp : Int32
+  timestamp : Int64
   characteristics : Int32
 } derive(@debug.Debug)
 

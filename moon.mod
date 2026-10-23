@@ -2,7 +2,7 @@
 
 name = "Rz-coder8848/moonpe"
 
-version = "0.7.0"
+version = "0.8.0"
 
 readme = "README.md"
 
@@ -18,12 +18,15 @@ keywords = [
   "dll",
   "binary",
   "parser",
+  "dotnet",
+  "json",
+  "security",
   "reverse-engineering",
 ]
 
 preferred_target = "wasm"
 
-description = "Pure-MoonBit Windows PE32/PE32+ reader: headers, IAT, dependencies, resources, LoadConfig and security metadata, with precise errors instead of panics."
+description = "Pure-MoonBit Windows PE32/PE32+ reader: IAT, resources, .NET metadata tables, LoadConfig, JSON and recursive scanning, with precise errors instead of panics."
 
 import {
   "moonbitlang/x@0.5.6",

@@ -227,10 +227,17 @@ pub fn Pe::version_info(self : Pe) -> VersionInfo? raise PeError {
       break
     }
   }
-  let entry = match target {
-    None => return None
-    Some(entry) => entry
+  match target {
+    None => None
+    Some(entry) => self.version_info_for_entry(entry)
   }
+}
+
+///|
+fn Pe::version_info_for_entry(
+  self : Pe,
+  entry : ResourceEntry,
+) -> VersionInfo? raise PeError {
   let offset = match self.rva_to_offset(entry.rva) {
     Some(offset) => offset
     None => return None
