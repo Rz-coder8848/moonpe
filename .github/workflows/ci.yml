@@ -22,9 +22,11 @@ jobs:
       - name: Update registry index
         run: moon update
       - name: Check
-        run: moon check --target all
+        run: moon check --deny-warn --target all
       - name: Test (wasm-gc)
-        run: moon test --target wasm-gc
+        run: moon test --deny-warn --target wasm-gc
+      - name: Test (wasm)
+        run: moon test --deny-warn --target wasm
 
 # `moon fmt --check` is deliberately not a CI gate: its output depends on the
 # toolchain release (older releases spell the default `Int` differently), and
