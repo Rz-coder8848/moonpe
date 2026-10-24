@@ -14,6 +14,14 @@ test "scan filters supported binary extensions" {
 }
 
 ///|
+test "scan distinguishes non-PE data from malformed PE" {
+  match scan_unsupported_reason(b"not a PE image") {
+    Some(reason) => assert_true(reason.contains("not a PE"))
+    None => assert_true(false)
+  }
+}
+
+///|
 test "scan report tracks verdicts and architecture" {
   let entries : Array[Json] = []
   let stats = empty_scan_stats()
@@ -31,10 +39,20 @@ test "scan report tracks verdicts and architecture" {
   })
   update_scan_stats(stats, review_entry)
   entries.push(review_entry)
-  let report = scan_report("fixtures", entries, stats)
+  let report = scan_report("fixtures", entries, stats, false)
   let text = report.stringify()
   assert_true(text.contains("\"files\":2"))
   assert_true(text.contains("\"ok\":1"))
   assert_true(text.contains("\"review\":1"))
   assert_true(text.contains("\"pe64\":1"))
+}
+
+///|
+test "summary-only scan omits individual files" {
+  let entries : Array[Json] = []
+  let stats = empty_scan_stats()
+  let report = scan_report("fixtures", entries, stats, true)
+  let text = report.stringify()
+  assert_true(text.contains("\"files\":null"))
+  assert_true(text.contains("\"files_omitted\":true"))
 }

@@ -172,12 +172,12 @@ addresses. Directory scans recursively inspect `.exe`, `.dll`, `.sys`, `.ocx`,
 
 ```sh
 moon run cmd/moonpe --target js -- --json check C:/Windows/System32/notepad.exe
-moon run cmd/moonpe --target js -- --json scan C:/Windows/System32/WindowsPowerShell
+moon run cmd/moonpe --target js -- --json --summary-only scan C:/Windows/System32
 ```
 
-The scan summary separates `ok`, `review`, `suspicious`, read/parse errors and
-PE32/PE64 counts. Each file entry also includes dependency, IAT, CFG and
-managed-assembly status.
+The scan summary separates `ok`, `review`, `suspicious`, skipped non-PE formats,
+read/parse errors and PE32/PE64 counts. `--summary-only` keeps large scans small;
+omitting it also reports each file's dependency, IAT, CFG and managed status.
 
 The check deliberately treats those imports as a *capability*, not a verdict:
 `kernel32.dll` imports most of the list and still comes out `ok`. It only
@@ -214,7 +214,7 @@ signature go through a separate raw read, because they are not addresses.
 
 ## Testing
 
-Forty-two tests, all offline: hand-built PE32 and PE32+ images with every
+Forty-four tests, all offline: hand-built PE32 and PE32+ images with every
 optional-header field, static/delay IAT slots, resources and CLR metadata
 tables. Every successfully parsed truncation/mutation is sent through all public
 table parsers; 500 deterministic mutation rounds must never panic.
@@ -235,6 +235,8 @@ Real-binary validation (output compared against system tools):
 | `mscorlib.dll` | 31 tables, 3356 types, 29257 methods, assembly `mscorlib 4.0.0.0` |
 | `System.Core.dll` | 33 tables, 1176 types, 498 type refs, 5 assembly refs |
 | `WindowsPowerShell\v1.0` scan | 59/59 files recognised, 40 PE32 and 19 PE64 |
+| `System32` full scan | 6584 files, 348 PE32, 6236 PE64, 0 parse errors |
+| `SysWOW64` full scan | 3029 files, 3020 PE32, 3 PE64, 6 Win16 skipped, 0 errors |
 
 ## Completion criteria for v1.0
 
@@ -252,7 +254,7 @@ feeling:
 8. this README documents the boundary, including summary-only and
    specification-reserved slots.
 
-All eight are met in 0.8.0.
+All eight are met in 0.8.1.
 
 ## References
 

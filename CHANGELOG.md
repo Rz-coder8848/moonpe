@@ -4,6 +4,23 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.1] - 2026-10-24
+
+### Added
+
+- `--summary-only` for large recursive scans. JSON reports omit the per-file
+  array and include `files_omitted: true`.
+- Scan summaries distinguish skipped non-PE32/PE32+ images (including Win16 NE)
+  from read or parse errors.
+- The suite now contains 44 tests, including summary-only and skipped-file
+  classification checks.
+
+### Validated
+
+- Full `System32` scan: 6584 files, 348 PE32, 6236 PE64, zero errors.
+- Full `SysWOW64` scan: 3029 files, 3020 PE32, 3 PE64, 6 Win16 files skipped,
+  zero errors.
+
 ## [0.8.0] - 2026-10-23
 
 ### Added

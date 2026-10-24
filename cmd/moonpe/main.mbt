@@ -13,7 +13,9 @@ fn main {
 fn print_usage() -> Unit {
   println("moonpe - inspect Windows PE images")
   println("")
-  println("usage: moonpe [--json] <command> <file-or-directory>")
+  println(
+    "usage: moonpe [--json] [--summary-only] <command> <file-or-directory>",
+  )
   println("")
   println("commands:")
   println("  info         headers, machine, subsystem, dependency counts")
@@ -33,7 +35,8 @@ fn print_usage() -> Unit {
   println("  all          everything")
   println("")
   println("global options:")
-  println("  --json       machine-readable JSON output")
+  println("  --json          machine-readable JSON output")
+  println("  --summary-only  omit per-file rows during scan")
 }
 
 ///|
@@ -54,17 +57,28 @@ fn run() -> Unit {
     print_usage()
     return
   }
-  let json_mode = args[base] == "--json"
-  if json_mode {
-    base = base + 1
-    if args.length() <= base {
-      if json_mode {
-        fail_json("missing command")
-      } else {
-        print_usage()
-      }
-      return
+  let mut json_mode = false
+  let mut summary_only = false
+  let mut reading_options = true
+  while reading_options && args.length() > base {
+    let option = args[base]
+    if option == "--json" {
+      json_mode = true
+      base = base + 1
+    } else if option == "--summary-only" {
+      summary_only = true
+      base = base + 1
+    } else {
+      reading_options = false
     }
+  }
+  if args.length() <= base {
+    if json_mode {
+      fail_json("missing command")
+    } else {
+      print_usage()
+    }
+    return
   }
   let command = args[base]
   if command == "-h" || command == "--help" || command == "help" {
@@ -82,7 +96,15 @@ fn run() -> Unit {
   }
   let path = args[base + 1]
   if command == "scan" {
-    run_scan(path, json_mode)
+    run_scan(path, json_mode, summary_only)
+    return
+  }
+  if summary_only {
+    if json_mode {
+      fail_json("--summary-only is only valid with scan")
+    } else {
+      fail("--summary-only is only valid with scan")
+    }
     return
   }
   let known = command == "info" ||

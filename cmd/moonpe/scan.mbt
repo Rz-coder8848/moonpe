@@ -7,6 +7,7 @@ priv struct ScanStats {
   mut ok : Int32
   mut review : Int32
   mut suspicious : Int32
+  mut skipped : Int32
   mut errors : Int32
   mut pe32 : Int32
   mut pe64 : Int32
@@ -14,7 +15,43 @@ priv struct ScanStats {
 
 ///|
 fn empty_scan_stats() -> ScanStats {
-  { files: 0, ok: 0, review: 0, suspicious: 0, errors: 0, pe32: 0, pe64: 0, }
+  {
+    files: 0,
+    ok: 0,
+    review: 0,
+    suspicious: 0,
+    skipped: 0,
+    errors: 0,
+    pe32: 0,
+    pe64: 0,
+  }
+}
+
+///|
+fn scan_unsupported_reason(bytes : Bytes) -> String? {
+  if bytes.length() < 64 ||
+    bytes[0].to_int() != 0x4D ||
+    bytes[1].to_int() != 0x5A {
+    return Some("not a PE32/PE32+ image")
+  }
+  let pe_offset = bytes[0x3C].to_int() |
+    (bytes[0x3D].to_int() << 8) |
+    (bytes[0x3E].to_int() << 16) |
+    (bytes[0x3F].to_int() << 24)
+  if pe_offset < 0 || pe_offset + 4 > bytes.length() {
+    return None
+  }
+  let signature = bytes[pe_offset].to_int() |
+    (bytes[pe_offset + 1].to_int() << 8)
+  if signature == 0x454E {
+    Some("16-bit NE image")
+  } else if signature == 0x454C {
+    Some("16-bit LE image")
+  } else if signature == 0x584C {
+    Some("16/32-bit LX image")
+  } else {
+    None
+  }
 }
 
 ///|
@@ -29,7 +66,7 @@ fn pe_extension(name : String) -> Bool {
 }
 
 ///|
-fn scan_json_entry(path : String, json_mode : Bool) -> Json {
+fn scan_json_entry(path : String, json_mode : Bool, verbose : Bool) -> Json {
   let bytes = @fs.read_file_to_bytes(path) catch {
     _ =>
       return {
@@ -37,6 +74,20 @@ fn scan_json_entry(path : String, json_mode : Bool) -> Json {
         "ok": Json::boolean(false),
         "error": Json::string("cannot read file"),
       }
+  }
+  match scan_unsupported_reason(bytes) {
+    Some(reason) => {
+      if !json_mode && verbose {
+        println("skipped    " + pad_right(reason, 24) + "  " + path)
+      }
+      return {
+        "path": Json::string(path),
+        "ok": Json::boolean(true),
+        "skipped": Json::boolean(true),
+        "reason": Json::string(reason),
+      }
+    }
+    None => ()
   }
   let pe = @pe.Pe::parse(bytes) catch {
     e =>
@@ -56,7 +107,7 @@ fn scan_json_entry(path : String, json_mode : Bool) -> Json {
     None => 0L
   }
   let metadata = pe.clr_metadata() catch { _ => None }
-  if !json_mode {
+  if !json_mode && verbose {
     let assembly = match metadata {
       Some(info) =>
         match info.assembly_name {
@@ -85,6 +136,7 @@ fn scan_json_entry(path : String, json_mode : Bool) -> Json {
   {
     "path": Json::string(path),
     "ok": Json::boolean(true),
+    "skipped": Json::boolean(false),
     "verdict": Json::string(report.verdict),
     "format": json_number(pe.bits()),
     "machine": Json::string(pe.machine()),
@@ -118,6 +170,10 @@ fn update_scan_stats(stats : ScanStats, entry : Json) -> Unit {
         Some(String("suspicious")) => stats.suspicious = stats.suspicious + 1
         _ => ()
       }
+      match values.get("skipped") {
+        Some(True) => stats.skipped = stats.skipped + 1
+        _ => ()
+      }
       match values.get("format") {
         Some(Number(value, ..)) =>
           if value.to_int() == 32 {
@@ -137,6 +193,7 @@ fn walk_scan_dir(
   path : String,
   depth : Int32,
   json_mode : Bool,
+  summary_only : Bool,
   entries : Array[Json],
   stats : ScanStats,
 ) -> Unit {
@@ -159,18 +216,25 @@ fn walk_scan_dir(
     if is_dir {
       if child_name != "$RECYCLE.BIN" &&
         child_name != "System Volume Information" {
-        walk_scan_dir(child, depth + 1, json_mode, entries, stats)
+        walk_scan_dir(child, depth + 1, json_mode, summary_only, entries, stats)
       }
     } else if pe_extension(child_name) {
-      let entry = scan_json_entry(child, json_mode)
+      let entry = scan_json_entry(child, json_mode, !summary_only)
       update_scan_stats(stats, entry)
-      entries.push(entry)
+      if !summary_only {
+        entries.push(entry)
+      }
     }
   }
 }
 
 ///|
-fn scan_report(path : String, entries : Array[Json], stats : ScanStats) -> Json {
+fn scan_report(
+  path : String,
+  entries : Array[Json],
+  stats : ScanStats,
+  summary_only : Bool,
+) -> Json {
   {
     "schema": Json::string("moonpe-scan/1"),
     "path": Json::string(path),
@@ -179,16 +243,22 @@ fn scan_report(path : String, entries : Array[Json], stats : ScanStats) -> Json 
       "ok": json_number(stats.ok),
       "review": json_number(stats.review),
       "suspicious": json_number(stats.suspicious),
+      "skipped": json_number(stats.skipped),
       "errors": json_number(stats.errors),
       "pe32": json_number(stats.pe32),
       "pe64": json_number(stats.pe64),
     },
-    "files": Json::array(entries),
+    "files": if summary_only {
+      Json::null()
+    } else {
+      Json::array(entries)
+    },
+    "files_omitted": Json::boolean(summary_only),
   }
 }
 
 ///|
-fn run_scan(path : String, json_mode : Bool) -> Unit {
+fn run_scan(path : String, json_mode : Bool, summary_only : Bool) -> Unit {
   let exists = @fs.path_exists(path)
   if !exists {
     if json_mode {
@@ -202,14 +272,16 @@ fn run_scan(path : String, json_mode : Bool) -> Unit {
   let entries : Array[Json] = []
   let stats = empty_scan_stats()
   if is_dir {
-    walk_scan_dir(path, 0, json_mode, entries, stats)
+    walk_scan_dir(path, 0, json_mode, summary_only, entries, stats)
   } else {
-    let entry = scan_json_entry(path, json_mode)
+    let entry = scan_json_entry(path, json_mode, !summary_only)
     update_scan_stats(stats, entry)
-    entries.push(entry)
+    if !summary_only {
+      entries.push(entry)
+    }
   }
   if json_mode {
-    print_json(scan_report(path, entries, stats))
+    print_json(scan_report(path, entries, stats, summary_only))
   } else {
     println("")
     println(
@@ -221,6 +293,8 @@ fn run_scan(path : String, json_mode : Bool) -> Unit {
       stats.review.to_string() +
       ", suspicious=" +
       stats.suspicious.to_string() +
+      ", skipped=" +
+      stats.skipped.to_string() +
       ", errors=" +
       stats.errors.to_string() +
       ", PE32/PE64=" +
