@@ -23,6 +23,12 @@ jobs:
         run: moon update
       - name: Check
         run: moon check --deny-warn --target all
+      - name: Build library
+        run: moon build --deny-warn --target wasm-gc
+      - name: Build CLI
+        run: moon build cmd/moonpe --deny-warn --target js
+      - name: Build example
+        run: moon build examples/release_check --deny-warn --target js
       - name: Test (wasm-gc)
         run: moon test --deny-warn --target wasm-gc
       - name: Test (wasm)
